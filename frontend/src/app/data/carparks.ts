@@ -17,11 +17,11 @@ export interface Carpark {
     walkingMinutes: number;
     hourlyRate: number;
     weekendRate?: number;
-    isSheltered: boolean;
+    isSheltered: boolean | null;
     carparkType?: string;
     isRecommended?: boolean;
     distance: number; // in meters
-    nightParking?: boolean;
+    nightParking?: boolean | null;
     source?: 'hdb' | 'lta' | 'supplemental'; // data source
     // Parking rates from CarparkRates.csv — only populated for LTA/supplemental carparks
     // where a name match was found; undefined means "data not available".
@@ -92,7 +92,12 @@ export function sortCarparks(
         case 'closest':
             return sorted.sort((a, b) => a.walkingMinutes - b.walkingMinutes);
         case 'available':
-            return sorted.sort((a, b) => b.availableLots - a.availableLots);
+            return sorted.sort((a, b) => {
+                const aUnknown = a.availabilityLevel === 'unknown';
+                const bUnknown = b.availabilityLevel === 'unknown';
+                if (aUnknown !== bUnknown) return aUnknown ? 1 : -1;
+                return b.availableLots - a.availableLots;
+            });
         case 'recommended':
         default:
             // Sort by: recommended first, then availability, then distance
@@ -110,5 +115,5 @@ export function sortCarparks(
 }
 
 export function filterShelteredCarparks(carparks: Carpark[]): Carpark[] {
-    return carparks.filter((cp) => cp.isSheltered);
+    return carparks.filter((cp) => cp.isSheltered === true);
 }

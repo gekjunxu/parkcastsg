@@ -22,9 +22,9 @@ export interface NearbyCarpark {
   total_lots: number
   lot_types: LotTypeAvailability[]
   crowd_level: 'low' | 'medium' | 'high' | 'full' | 'unknown'
-  is_sheltered: boolean
+  is_sheltered: boolean | null
   distance: number // metres
-  night_parking: boolean
+  night_parking: boolean | null
   car_park_type: string
   source: 'hdb' | 'lta' | 'supplemental'
   weekdays_rate_1: string | null
@@ -122,9 +122,9 @@ export function transformCarpark(raw: NearbyCarpark): Carpark {
         availabilityLevel: crowdToAvailability(raw.crowd_level),
         walkingMinutes: distanceToWalkingMinutes(raw.distance),
 
-        // Rates will be accurately populated from `getNumericLiveCarRate` below based on the current hour.
-        // We set a temporary fallback here if getNumericLiveCarRate fails to parse complex text.
-        hourlyRate: (isLta || isSupplemental) ? Number.POSITIVE_INFINITY : 1.20,
+        // Unknown rates stay at Infinity so "Cheapest" never promotes a
+        // carpark whose price is not actually known.
+        hourlyRate: Number.POSITIVE_INFINITY,
 
         isSheltered: raw.is_sheltered,
         carparkType: raw.car_park_type,

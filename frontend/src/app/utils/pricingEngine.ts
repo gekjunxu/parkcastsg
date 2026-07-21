@@ -14,6 +14,13 @@ interface PeakWindow {
 }
 type PeakConfig = Record<string, PeakWindow[]>;
 
+export type ParsedRateBasis = 'hour' | 'entry' | 'free' | 'unknown';
+
+export interface ParsedTextRate {
+  amount: number;
+  basis: ParsedRateBasis;
+}
+
 const PEAK_CARPARKS: PeakConfig = {
   // ACB, CY: Weekdays, 10:00am to 6:00pm; Weekends, 8:00am to 7:00pm
   "ACB": [{ days: [1, 2, 3, 4, 5], startHour: 10, endHour: 18 }, { days: [0, 6], startHour: 8, endHour: 19 }],
@@ -125,7 +132,7 @@ function parseHourBoundary(timeStr: string): number | null {
  * (e.g. from CarparkRates.csv) into numerical hourly equivalents.
  * Segment checking ensures we only process the rate block that belongs to the current hour.
  */
-export function parseTextRateEquivalent(rate: string | undefined, currentHour: number): number | null {
+export function parseTextRate(rate: string | undefined, currentHour: number): ParsedTextRate | null {
   if (!rate || rate === '-' || rate.toLowerCase() === 'no') return null;
   
   let lower = rate.toLowerCase();
@@ -186,48 +193,56 @@ export function parseTextRateEquivalent(rate: string | undefined, currentHour: n
 
   // Free checks
   if (lower.includes('free') && (lower.includes('daily') || !/\d/.test(lower))) {
-    return 0.0;
+    return { amount: 0, basis: 'free' };
   }
 
   let match: RegExpMatchArray | null;
 
   // $X for 1st hr (Placed FIRST so base rate is extracted)
   match = lower.match(/\$([0-9.]+).*?1st(?:\s?[0-9])?\s?hr/);
-  if (match) return parseFloat(match[1]);
+  if (match) return { amount: parseFloat(match[1]), basis: 'hour' };
 
   // $X per hr
   match = lower.match(/\$([0-9.]+)\s(?:per|\/)\s?(?:hr|hour)/);
-  if (match) return parseFloat(match[1]);
+  if (match) return { amount: parseFloat(match[1]), basis: 'hour' };
 
   // $X per ½ hr -> X * 2
   match = lower.match(/\$([0-9.]+)\s(?:per|\/)\s?½\s?hr/);
-  if (match) return parseFloat(match[1]) * 2;
+  if (match) return { amount: parseFloat(match[1]) * 2, basis: 'hour' };
 
   // $X / 30 mins -> X * 2
   match = lower.match(/\$([0-9.]+)\s(?:per|\/)\s?30\s?mins?/);
-  if (match) return parseFloat(match[1]) * 2;
+  if (match) return { amount: parseFloat(match[1]) * 2, basis: 'hour' };
 
   // $X for sub ½ hr -> X * 2
   match = lower.match(/\$([0-9.]+).*?sub.*?½\s?hr/);
-  if (match) return parseFloat(match[1]) * 2;
+  if (match) return { amount: parseFloat(match[1]) * 2, basis: 'hour' };
 
   // $X for sub hr -> X
   match = lower.match(/\$([0-9.]+).*?sub.*?hr/);
-  if (match) return parseFloat(match[1]);
+  if (match) return { amount: parseFloat(match[1]), basis: 'hour' };
 
   // $X per entry
   match = lower.match(/\$([0-9.]+).*?per entry/);
-  if (match) return parseFloat(match[1]);
+  if (match) return { amount: parseFloat(match[1]), basis: 'entry' };
 
   // $X /min or $X per min — convert to hourly
   match = lower.match(/\$([0-9.]+)\s*(?:per\s*min(?:ute)?|\/\s*min(?:ute)?)/);
-  if (match) return parseFloat(match[1]) * 60;
+  if (match) return { amount: parseFloat(match[1]) * 60, basis: 'hour' };
 
   // Simple fallback finding any $ amount
   match = lower.match(/\$([0-9.]+)/);
-  if (match) return parseFloat(match[1]);
+  if (match) return { amount: parseFloat(match[1]), basis: 'unknown' };
 
   return null;
+}
+
+/** Backwards-compatible numeric helper used by focused parser tests. */
+export function parseTextRateEquivalent(
+  rate: string | undefined,
+  currentHour: number,
+): number | null {
+  return parseTextRate(rate, currentHour)?.amount ?? null;
 }
 
 /** Returns true only when a rate string contains usable data (not missing/sentinel). */
@@ -252,7 +267,7 @@ function getTargetTextRate(carpark: Carpark, day: number, now: Date): string | u
     return firstValidRate(carpark.saturdayRate, carpark.weekdaysRate1, carpark.weekdaysRate2);
   }
   // Mon-Fri: combine both weekday rate fields so that the time-window matching
-  // in parseTextRateEquivalent can select the correct block (e.g. after-5pm
+  // in parseTextRate can select the correct block (e.g. after-5pm
   // rates stored in weekdaysRate2 are invisible when only weekdaysRate1 is used).
   const parts = [carpark.weekdaysRate1, carpark.weekdaysRate2].filter(hasRate);
   return parts.length > 0 ? parts.join('\n') : undefined;
@@ -288,12 +303,17 @@ export function calculateLiveRates(carpark: Carpark): LivePrices {
   // --- NON-HDB CUSTOM PARSABLE RATES ---
   if (carpark.source === 'lta' || carpark.source === 'supplemental') {
     const rateText = getTargetTextRate(carpark, day, now);
-    const parsed = parseTextRateEquivalent(rateText, hour);
+    const parsed = parseTextRate(rateText, hour);
 
     if (parsed !== null) {
-        if (parsed === 0) return { car: 'Free*', motorcycle: 'Free*', heavy: 'Free*' };
-        const parsedStr = `$${parsed.toFixed(2)}/hr`;
-        // Expose parsed rate cleanly to map marker
+        if (parsed.basis === 'free') {
+          return { car: 'Free*', motorcycle: 'Free*', heavy: 'Free*' };
+        }
+        const parsedStr = parsed.basis === 'hour'
+          ? `$${parsed.amount.toFixed(2)}/hr`
+          : parsed.basis === 'entry'
+            ? `$${parsed.amount.toFixed(2)}/entry`
+            : rateText || 'Rate unavailable';
         return {
           car: parsedStr,
           motorcycle: 'No Data',
@@ -302,7 +322,7 @@ export function calculateLiveRates(carpark: Carpark): LivePrices {
     } else {
         // Fallback for empty or truly completely unparsable edgecases.
         return {
-          car: rateText || 'Rate Varies',
+          car: rateText || 'Rate unavailable',
           motorcycle: 'No Data',
           heavy: 'No Data'
         };
@@ -364,18 +384,27 @@ export function calculateLiveRates(carpark: Carpark): LivePrices {
 
 /**
  * Extracts a numeric value from the live car rate for sorting purposes.
- * Returns 0 for Free, 999 for Unavailable, and the hourly rate otherwise.
+ * Returns Infinity when no comparable rate is known so unknown prices sort last.
  */
 export function getNumericLiveCarRate(carpark: Carpark): number {
+  if (carpark.source === 'lta' || carpark.source === 'supplemental') {
+    const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Singapore' }));
+    const parsed = parseTextRate(
+      getTargetTextRate(carpark, now.getDay(), now),
+      now.getHours(),
+    );
+    if (!parsed || parsed.basis === 'unknown') return Number.POSITIVE_INFINITY;
+    return parsed.amount;
+  }
+
   const live = calculateLiveRates(carpark);
   const str = live.car;
   if (str.includes('Free')) return 0;
-  if (str.includes('No Short-Term')) return 999;
-  if (str.includes('Rate Varies')) return 1.20; // safe fallback
+  if (str.includes('No Short-Term')) return Number.POSITIVE_INFINITY;
 
   const match = str.match(/\$([0-9.]+)/);
   if (match) return parseFloat(match[1]);
-  return 1.20; // fallback
+  return Number.POSITIVE_INFINITY;
 }
 
 /**

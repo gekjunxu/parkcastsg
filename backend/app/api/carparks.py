@@ -13,6 +13,7 @@ from pydantic import BaseModel
 from app.data.carpark_lookup import CARPARK_LOOKUP
 from app.data.lta_carpark_lookup import LTA_CARPARK_LOOKUP
 from app.data.lta_rates_lookup import lookup_rate
+from app.data.lta_rates_lookup import canonicalise_name
 from app.data.supplemental_carpark_lookup import SUPPLEMENTAL_CARPARK_LOOKUP, LTA_DEVELOPMENT_NAMES, SUPPLEMENTAL_ID_LOOKUP
 
 router = APIRouter()
@@ -50,9 +51,9 @@ class CarparkAvailability(BaseModel):
     total_lots: int
     lot_types: list[LotTypeAvailability]
     crowd_level: str  # "low" | "medium" | "high" | "full" | "unknown"
-    is_sheltered: bool
+    is_sheltered: bool | None
     distance: int  # metres from the query point
-    night_parking: bool
+    night_parking: bool | None
     car_park_type: str  # e.g. "MULTI-STOREY CAR PARK", "SURFACE CAR PARK"
     source: str  # "hdb" | "lta" | "supplemental"
     # HDB pricing metadata (populated for HDB carparks; defaults for others)
@@ -293,7 +294,9 @@ async def _fetch_lta_carparks(lat: float, lng: float, radius: int) -> list[Carpa
     results: list[CarparkAvailability] = []
     for cp_id, info in nearby.items():
         dist = _haversine(lat, lng, info["lat"], info["lng"])
-        available = availability.get(cp_id, 0)
+        available = availability.get(cp_id)
+        has_live_availability = available is not None
+        available_lots = available if available is not None else 0
         development = info["development"]
         prefixed_id = f"{LTA_ID_PREFIX}{cp_id}"
         rates = lookup_rate(development) or {}
@@ -304,12 +307,16 @@ async def _fetch_lta_carparks(lat: float, lng: float, radius: int) -> list[Carpa
                 address=development or f"Carpark {cp_id}",
                 lat=info["lat"],
                 lng=info["lng"],
-                available_lots=available,
+                available_lots=available_lots,
                 total_lots=0,  # LTA API does not provide total lots
-                crowd_level=_crowd_level_absolute(available),
-                is_sheltered=True,  # LTA API does not expose shelter info; default to True
+                crowd_level=(
+                    _crowd_level_absolute(available_lots)
+                    if has_live_availability
+                    else "unknown"
+                ),
+                is_sheltered=None,  # LTA API does not expose shelter info
                 distance=round(dist),
-                night_parking=True,  # LTA API does not expose night-parking info; default to True
+                night_parking=None,  # LTA API does not expose night-parking info
                 car_park_type="CAR PARK",
                 source="lta",
                 lot_types=[],
@@ -317,7 +324,9 @@ async def _fetch_lta_carparks(lat: float, lng: float, radius: int) -> list[Carpa
                 weekdays_rate_2=_rate_field(rates.get("weekdays_rate_2", "")),
                 saturday_rate=_rate_field(rates.get("saturday_rate", "")),
                 sunday_ph_rate=_rate_field(rates.get("sunday_ph_rate", "")),
-                availability_timestamp=lta_fetch_timestamp,
+                availability_timestamp=(
+                    lta_fetch_timestamp if has_live_availability else None
+                ),
             )
         )
 
@@ -425,14 +434,17 @@ async def _get_lta_carpark(
     if not isinstance(data, dict) or not isinstance(data.get("value"), list):
         raise HTTPException(status_code=502, detail="Unexpected LTA API response shape")
 
-    # Sum available car lots for this carpark across any multiple LotType="C" entries
-    available = sum(
-        int(e.get("AvailableLots", 0))
+    # Preserve the distinction between a real zero and a carpark omitted from
+    # the latest live feed.
+    matching_entries = [
+        e
         for e in data["value"]
         if isinstance(e, dict)
         and str(e.get("CarParkID", "")).strip() == raw_id
         and e.get("LotType") == "C"
-    )
+    ]
+    has_live_availability = bool(matching_entries)
+    available = sum(int(e.get("AvailableLots", 0)) for e in matching_entries)
 
     development = info["development"]
     rates = lookup_rate(development) or {}
@@ -449,10 +461,14 @@ async def _get_lta_carpark(
         lng=info["lng"],
         available_lots=available,
         total_lots=0,  # LTA API does not provide total lots
-        crowd_level=_crowd_level_absolute(available),
-        is_sheltered=True,  # LTA API does not expose shelter info; default to True
+        crowd_level=(
+            _crowd_level_absolute(available)
+            if has_live_availability
+            else "unknown"
+        ),
+        is_sheltered=None,  # LTA API does not expose shelter info
         distance=round(dist),
-        night_parking=True,  # LTA API does not expose night-parking info; default to True
+        night_parking=None,  # LTA API does not expose night-parking info
         car_park_type="CAR PARK",
         source="lta",
         lot_types=[],
@@ -460,7 +476,9 @@ async def _get_lta_carpark(
         weekdays_rate_2=_rate_field(rates.get("weekdays_rate_2", "")),
         saturday_rate=_rate_field(rates.get("saturday_rate", "")),
         sunday_ph_rate=_rate_field(rates.get("sunday_ph_rate", "")),
-        availability_timestamp=lta_fetch_timestamp,
+        availability_timestamp=(
+            lta_fetch_timestamp if has_live_availability else None
+        ),
     )
 
 
@@ -477,7 +495,7 @@ def _fetch_supplemental_carparks(lat: float, lng: float, radius: int) -> list[Ca
     results: list[CarparkAvailability] = []
 
     for norm_name, info in SUPPLEMENTAL_CARPARK_LOOKUP.items():
-        if norm_name in LTA_DEVELOPMENT_NAMES:
+        if canonicalise_name(norm_name) in LTA_DEVELOPMENT_NAMES:
             continue  # already covered by the LTA DataMall dataset
 
         dist = _haversine(lat, lng, info["lat"], info["lng"])
@@ -498,9 +516,9 @@ def _fetch_supplemental_carparks(lat: float, lng: float, radius: int) -> list[Ca
                 available_lots=0,
                 total_lots=0,
                 crowd_level="unknown",
-                is_sheltered=True,  # unknown; default True for commercial mall carparks
+                is_sheltered=None,
                 distance=round(dist),
-                night_parking=True,  # unknown; default True to avoid hiding options
+                night_parking=None,
                 car_park_type="CAR PARK",
                 source="supplemental",
                 lot_types=[],
@@ -542,9 +560,9 @@ def _get_supplemental_carpark(
         available_lots=0,
         total_lots=0,
         crowd_level="unknown",
-        is_sheltered=True,
+        is_sheltered=None,
         distance=round(dist),
-        night_parking=True,
+        night_parking=None,
         car_park_type="CAR PARK",
         source="supplemental",
         lot_types=[],

@@ -36,8 +36,26 @@ def _strip_parens(name: str) -> str:
     return re.sub(r"\s*\(.*\)\s*$", "", name).strip()
 
 
-def _load() -> tuple[dict[str, RateRecord], dict[str, RateRecord]]:
-    """Return (primary_index, stripped_index).
+def canonicalise_name(name: str) -> str:
+    """Return a conservative comparison key for formatting-only differences.
+
+    This handles punctuation, spacing, and the common ``Bt`` abbreviation
+    without using fuzzy matching, which could silently attach the wrong price
+    to a similarly named development.
+    """
+    words = re.findall(r"[a-z0-9]+", name.lower())
+    expanded = ["bukit" if word == "bt" else word for word in words]
+    if expanded and expanded[0] == "the":
+        expanded = expanded[1:]
+    return "".join(expanded)
+
+
+def _load() -> tuple[
+    dict[str, RateRecord],
+    dict[str, RateRecord],
+    dict[str, RateRecord],
+]:
+    """Return exact, parenthesis-stripped, and canonical indexes.
 
     primary_index  — keyed by full normalised CSV carpark name
     stripped_index — keyed by normalised name with parens removed;
@@ -46,9 +64,10 @@ def _load() -> tuple[dict[str, RateRecord], dict[str, RateRecord]]:
     """
     primary: dict[str, RateRecord] = {}
     stripped: dict[str, RateRecord] = {}
+    canonical_candidates: dict[str, list[RateRecord]] = {}
 
     if not _RATES_CSV.exists():
-        return primary, stripped
+        return primary, stripped, {}
 
     with open(_RATES_CSV, encoding="utf-8") as f:
         for row in csv.DictReader(f):
@@ -71,10 +90,22 @@ def _load() -> tuple[dict[str, RateRecord], dict[str, RateRecord]]:
                 # Only add if not already covered by a shorter CSV entry
                 stripped.setdefault(stripped_key, record)
 
-    return primary, stripped
+            canonical_key = canonicalise_name(name)
+            if canonical_key:
+                canonical_candidates.setdefault(canonical_key, []).append(record)
+
+    # Only keep unambiguous canonical keys. If two rate rows collapse to the
+    # same key, exact/stripped matching remains available but canonical matching
+    # refuses to guess.
+    canonical = {
+        key: records[0]
+        for key, records in canonical_candidates.items()
+        if len(records) == 1
+    }
+    return primary, stripped, canonical
 
 
-_PRIMARY, _STRIPPED = _load()
+_PRIMARY, _STRIPPED, _CANONICAL = _load()
 
 
 def lookup_rate(development: str) -> RateRecord | None:
@@ -86,7 +117,11 @@ def lookup_rate(development: str) -> RateRecord | None:
     convert them to ``None`` before storing.
     """
     key = _normalise(development)
-    return _PRIMARY.get(key) or _STRIPPED.get(key)
+    return (
+        _PRIMARY.get(key)
+        or _STRIPPED.get(key)
+        or _CANONICAL.get(canonicalise_name(development))
+    )
 
 
 # Convenience export expected by carparks.py

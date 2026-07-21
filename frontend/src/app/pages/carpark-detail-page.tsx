@@ -386,21 +386,36 @@ export function CarparkDetailPage() {
             <div className='flex items-center gap-3 mb-4 p-3 bg-gray-50 rounded-lg'>
               <div
                 className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                  carpark.isSheltered ? 'bg-green-100' : 'bg-gray-200'
+                  carpark.isSheltered === true
+                    ? 'bg-green-100'
+                    : carpark.isSheltered === false
+                      ? 'bg-red-100'
+                      : 'bg-gray-200'
                 }`}
               >
                 <span className='text-lg'>
-                  {carpark.isSheltered ? '✓' : '✗'}
+                  {carpark.isSheltered === true
+                    ? '✓'
+                    : carpark.isSheltered === false
+                      ? '✗'
+                      : '?'}
                 </span>
               </div>
               <div>
                 <p className='font-medium text-gray-900'>
-                  Sheltered parking: {carpark.isSheltered ? 'Yes' : 'No'}
+                  Sheltered parking:{' '}
+                  {carpark.isSheltered === true
+                    ? 'Yes'
+                    : carpark.isSheltered === false
+                      ? 'No'
+                      : 'Unknown'}
                 </p>
                 <p className='text-sm text-gray-600'>
-                  {carpark.isSheltered
+                  {carpark.isSheltered === true
                     ? 'Protected from rain and sun'
-                    : 'Open-air parking'}
+                    : carpark.isSheltered === false
+                      ? 'Open-air parking'
+                      : 'The data source does not publish shelter information'}
                 </p>
               </div>
             </div>

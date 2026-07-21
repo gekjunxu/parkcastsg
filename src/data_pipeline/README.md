@@ -13,6 +13,7 @@ database pipeline.
 - `generate_coords.py`: converts HDB SVY21 coordinates to WGS84.
 - `fetch_hdb.py` and `fetch_weather.py`: small API inspection helpers.
 - `spatial_mapping.py`: maps carparks to their nearest weather forecast area.
+- `audit_rate_coverage.py`: reports matched and unmatched LTA rate coverage.
 
 Install the maintenance-only dependencies with:
 
@@ -27,3 +28,9 @@ frontend pricing parser supports time bands, per-entry charges, and free periods
 
 There is currently no automatic updater for `CarparkRates.csv`. Each public
 release should record where and when its rate catalogue was obtained.
+
+Run the coverage audit after changing rate or LTA data:
+
+```sh
+python src/data_pipeline/audit_rate_coverage.py
+```
