@@ -4,20 +4,13 @@ import {
   ArrowLeft,
   Navigation,
   Heart,
-  Bell,
   Cloud,
   Sun,
   CloudRain,
 } from 'lucide-react'
 import { Button } from '../components/ui/button'
-import { PremiumModal } from '../components/premium-modal'
 import { getAvailabilityColor, type Carpark } from '../data/carparks'
-import {
-  getCarparkById,
-  getCarparkPrediction,
-  transformCarpark,
-  type CarparkPredictionResponse,
-} from '../../api/carparkService'
+import { getCarparkById, transformCarpark } from '../../api/carparkService'
 import { getWeatherForecast, type WeatherData } from '../../api/weatherService'
 import { LoadingSkeleton } from '../components/loading-skeleton'
 import { NavigationChooserModal } from '../components/navigation-chooser-modal'
@@ -26,46 +19,6 @@ import {
   isFavoriteCarpark,
   toggleFavoriteCarpark,
 } from '../utils/favoritesStorage'
-
-type PredictionHorizon = 15 | 30 | 60
-const PREDICTION_HORIZONS: PredictionHorizon[] = [15, 30, 60]
-
-interface PredictionRow {
-  lotType: string
-  values: Partial<
-    Record<
-      PredictionHorizon,
-      {
-        predictedAvailableLots: number
-        predictedOccupancyRate: number
-      }
-    >
-  >
-}
-
-function PredictionSectionSkeleton() {
-  return (
-    <div className='rounded-lg border border-gray-200 p-4'>
-      <div className='mb-3'>
-        <div className='h-4 w-28 rounded bg-gray-200 animate-pulse' />
-        <div className='mt-2 h-3 w-48 rounded bg-gray-100 animate-pulse' />
-      </div>
-
-      <div className='grid grid-cols-3 gap-3'>
-        {PREDICTION_HORIZONS.map((horizon) => (
-          <div
-            key={horizon}
-            className='rounded-lg bg-gray-50 px-3 py-4 text-center'
-          >
-            <div className='mx-auto h-3 w-14 rounded bg-gray-200 animate-pulse' />
-            <div className='mx-auto mt-3 h-8 w-12 rounded bg-gray-200 animate-pulse' />
-            <div className='mx-auto mt-2 h-3 w-20 rounded bg-gray-100 animate-pulse' />
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
 
 function RateRow({ label, value }: { label: string; value: string }) {
   return (
@@ -82,17 +35,12 @@ export function CarparkDetailPage() {
   const navigate = useNavigate()
   const { id } = useParams()
   const [searchParams] = useSearchParams()
-  const [showPremiumModal, setShowPremiumModal] = useState(false)
   const [showNavModal, setShowNavModal] = useState(false)
   const [isSaved, setIsSaved] = useState(false)
 
   // Dynamic states
   const [carpark, setCarpark] = useState<Carpark | null>(null)
   const [weather, setWeather] = useState<WeatherData | null>(null)
-  const [prediction, setPrediction] =
-    useState<CarparkPredictionResponse | null>(null)
-  const [predictionLoading, setPredictionLoading] = useState(true)
-  const [predictionError, setPredictionError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -103,8 +51,6 @@ export function CarparkDetailPage() {
     const fetchCarparkDetails = async () => {
       setIsLoading(true)
       setError(null)
-      setPredictionLoading(true)
-      setPredictionError(null)
       try {
         const queryLat = searchParams.get('lat')
         const queryLng = searchParams.get('lng')
@@ -121,53 +67,24 @@ export function CarparkDetailPage() {
             lng = parsedLng
           }
         }
-        // Entering this page only happens after "View full details",
-        // so fetching prediction here ties the request to that action.
         const rawData = await getCarparkById(id, lat, lng)
         const transformedCarpark = transformCarpark(rawData)
-        const canPredict = transformedCarpark.source === 'hdb'
-
-        const rawWeatherPromise = getWeatherForecast(
-          rawData.lat,
-          rawData.lng,
-        ).catch(() => null)
-
-        const rawPredictionPromise = canPredict
-          ? getCarparkPrediction(id).catch((predictionErr) => {
-              console.error('Prediction fetch error:', predictionErr)
-              if (isMounted) {
-                setPredictionError(
-                  'Prediction data is temporarily unavailable.',
-                )
-              }
-              return null
-            })
-          : Promise.resolve(null)
 
         if (isMounted) {
           setCarpark(transformedCarpark)
-          if (!canPredict) {
-            setPredictionLoading(false)
-          }
         }
 
-        // Await the prediction and weather promises in parallel after we have the carpark location, so they can load while the user is viewing the details.
-        const [rawWeather, rawPrediction] = await Promise.all([
-          rawWeatherPromise,
-          rawPredictionPromise,
-        ])
+        const rawWeather = await getWeatherForecast(
+          rawData.lat,
+          rawData.lng,
+        ).catch(() => null)
         if (isMounted) {
           setWeather(rawWeather)
-          setPrediction(rawPrediction)
-          if (canPredict) {
-            setPredictionLoading(false)
-          }
         }
       } catch (err) {
         if (isMounted) {
           setError('Failed to fetch carpark details. Please try again.')
           console.error(err)
-          setPredictionLoading(false)
         }
       } finally {
         if (isMounted) {
@@ -262,67 +179,6 @@ export function CarparkDetailPage() {
       default:
         return lotType || 'Unknown'
     }
-  }
-
-  // Re-shape the horizon-first response into lot-type rows so the UI can show
-  // one card per lot type with 15 / 30 / 60 minute predictions side-by-side
-  const predictionRows: PredictionRow[] = prediction
-    ? prediction.predictions.reduce<PredictionRow[]>((rows, snapshot) => {
-        for (const lotPrediction of snapshot.by_lot_type) {
-          let row = rows.find((item) => item.lotType === lotPrediction.lot_type)
-          if (!row) {
-            row = { lotType: lotPrediction.lot_type, values: {} }
-            rows.push(row)
-          }
-
-          row.values[snapshot.horizon_minutes] = {
-            predictedAvailableLots: lotPrediction.predicted_available_lots,
-            predictedOccupancyRate: lotPrediction.predicted_occupancy_rate,
-          }
-        }
-        return rows
-      }, [])
-    : []
-
-  const parseBaseTimestamp = (value: string) => {
-    const date = new Date(`${value}+08:00`)
-    return Number.isNaN(date.getTime()) ? null : date
-  }
-
-  const formatPredictionTimestamp = (value: string) => {
-    const date = new Date(value)
-    if (Number.isNaN(date.getTime())) {
-      return value
-    }
-    return date.toLocaleString()
-  }
-
-  const formatPredictionTargetTime = (
-    baseTimestamp: string | undefined,
-    horizon: PredictionHorizon,
-  ) => {
-    if (!baseTimestamp) {
-      return horizon === 60 ? '1 hour' : `${horizon} min`
-    }
-
-    const baseDate = parseBaseTimestamp(baseTimestamp)
-    if (!baseDate) {
-      return horizon === 60 ? '1 hour' : `${horizon} min`
-    }
-
-    const targetDate = new Date(baseDate.getTime() + horizon * 60 * 1000)
-    return targetDate.toLocaleTimeString([], {
-      hour: 'numeric',
-      minute: '2-digit',
-    })
-  }
-
-  const formatPredictedLots = (value: number) => {
-    return Number.isInteger(value) ? value.toString() : value.toFixed(1)
-  }
-
-  const formatOccupancyRate = (value: number) => {
-    return `${(value * 100).toFixed(0)}% occupied`
   }
 
   return (
@@ -472,91 +328,6 @@ export function CarparkDetailPage() {
             </div>
           )}
 
-          {/* Prediction Section */}
-          <div className='bg-white rounded-[12px] p-6 shadow-sm border border-gray-200'>
-            <div className='flex items-center justify-between mb-4'>
-              <h2 className='text-base font-semibold text-gray-900'>
-                Predicted Availability by Lot Type
-              </h2>
-            </div>
-            {prediction && (
-              <div className='mb-4 space-y-1 text-xs text-gray-500'>
-                <p>
-                  Generated at{' '}
-                  {formatPredictionTimestamp(prediction.generated_at)}
-                </p>
-                <p>
-                  Forecast base time{' '}
-                  {formatPredictionTimestamp(
-                    `${prediction.base_timestamp}+08:00`,
-                  )}
-                </p>
-              </div>
-            )}
-
-            {predictionLoading ? (
-              <PredictionSectionSkeleton />
-            ) : predictionError ? (
-              <div className='rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800'>
-                {predictionError}
-              </div>
-            ) : predictionRows.length > 0 ? (
-              <div className='space-y-4'>
-                {predictionRows.map((row) => (
-                  <div
-                    key={row.lotType}
-                    className='rounded-lg border border-gray-200 p-4'
-                  >
-                    <div className='mb-2'>
-                      <p className='font-medium text-gray-900'>
-                        {formatLotType(row.lotType)}
-                      </p>
-                    </div>
-
-                    <div className='grid grid-cols-3 gap-3'>
-                      {PREDICTION_HORIZONS.map((horizon) => {
-                        const value = row.values[horizon]
-                        return (
-                          <div
-                            key={horizon}
-                            className='rounded-lg bg-gray-50 px-3 py-4 text-center'
-                          >
-                            <p className='text-xs font-medium uppercase tracking-wide text-gray-500'>
-                              {formatPredictionTargetTime(
-                                prediction?.base_timestamp,
-                                horizon,
-                              )}
-                            </p>
-                            <p className='mt-2 text-2xl font-semibold text-gray-900'>
-                              {value
-                                ? formatPredictedLots(
-                                    value.predictedAvailableLots,
-                                  )
-                                : '--'}
-                            </p>
-                            <p className='mt-1 text-xs text-gray-500'>
-                              {value
-                                ? formatOccupancyRate(
-                                    value.predictedOccupancyRate,
-                                  )
-                                : 'Pending model output'}
-                            </p>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className='rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600'>
-                {carpark.source !== 'hdb'
-                  ? 'Predictions currently available for HDB carparks only.'
-                  : 'Prediction data is not available yet for this carpark.'}
-              </div>
-            )}
-          </div>
-
           {/* Pricing Section */}
           <div className='bg-white rounded-[12px] p-6 shadow-sm border border-gray-200'>
             <h2 className='text-base font-semibold text-gray-900 mb-4'>
@@ -693,13 +464,6 @@ export function CarparkDetailPage() {
           >
             <Heart className={`w-5 h-5 ${isSaved ? 'fill-current' : ''}`} />
           </Button>
-          <Button
-            onClick={() => setShowPremiumModal(true)}
-            variant='outline'
-            className='px-6 py-6 rounded-lg border-amber-300 text-amber-600 hover:bg-amber-50'
-          >
-            <Bell className='w-5 h-5' />
-          </Button>
         </div>
       </div>
 
@@ -710,12 +474,6 @@ export function CarparkDetailPage() {
         lat={carpark.lat}
         lng={carpark.lng}
         address={carpark.address}
-      />
-
-      {/* Premium Modal */}
-      <PremiumModal
-        isOpen={showPremiumModal}
-        onClose={() => setShowPremiumModal(false)}
       />
     </>
   )

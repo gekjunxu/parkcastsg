@@ -12,24 +12,6 @@ export interface LotTypeAvailability {
   total_lots: number
 }
 
-export interface PredictionLotTypeValue {
-  lot_type: string
-  predicted_available_lots: number
-  predicted_occupancy_rate: number
-}
-
-export interface PredictionSnapshot {
-  horizon_minutes: 15 | 30 | 60
-  by_lot_type: PredictionLotTypeValue[]
-}
-
-export interface CarparkPredictionResponse {
-  carpark_number: string
-  generated_at: string
-  base_timestamp: string
-  predictions: PredictionSnapshot[]
-}
-
 export interface NearbyCarpark {
   id: string
   name: string
@@ -95,17 +77,6 @@ export async function getCarparkById(
   const res = await fetch(url)
   if (!res.ok) {
     throw new Error(`Carpark API error ${res.status}`)
-  }
-  return res.json()
-}
-
-export async function getCarparkPrediction(
-  carparkNumber: string,
-): Promise<CarparkPredictionResponse> {
-  const url = `${API_BASE}/api/v1/carparks/${carparkNumber}/prediction`
-  const res = await fetch(url)
-  if (!res.ok) {
-    throw new Error(`Prediction API error ${res.status}`)
   }
   return res.json()
 }
