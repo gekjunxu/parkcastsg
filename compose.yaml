@@ -1,0 +1,13 @@
+services:
+  parkcastsg:
+    build:
+      context: .
+      args:
+        VITE_API_BASE_URL: ""
+    ports:
+      - "${PARKCAST_PORT:-8080}:8000"
+    environment:
+      ENVIRONMENT: production
+      LTA_API_KEY: "${LTA_API_KEY:-}"
+      CORS_ALLOW_ORIGINS: "${CORS_ALLOW_ORIGINS:-}"
+    restart: unless-stopped

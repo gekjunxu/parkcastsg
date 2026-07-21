@@ -1,5 +1,9 @@
-from fastapi import FastAPI
+from pathlib import Path
+
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
 import os
 
@@ -36,3 +40,38 @@ def health_check():
 
 app.include_router(carparks.router, prefix="/api/v1")
 app.include_router(weather.router, prefix="/api/v1")
+
+
+# A production image can place the compiled frontend in /app/static and serve
+# the entire application from one origin. Local development still uses Vite.
+static_dir = Path(
+    os.getenv(
+        "STATIC_DIR",
+        str(Path(__file__).resolve().parents[1] / "static"),
+    )
+)
+
+if static_dir.is_dir():
+    assets_dir = static_dir / "assets"
+    if assets_dir.is_dir():
+        app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def serve_frontend(full_path: str):
+        """Serve static files and fall back to index.html for SPA routes."""
+        if full_path.startswith("api/"):
+            raise HTTPException(status_code=404, detail="API endpoint not found")
+
+        static_root = static_dir.resolve()
+        requested_file = (static_root / full_path).resolve()
+        if (
+            full_path
+            and requested_file.is_relative_to(static_root)
+            and requested_file.is_file()
+        ):
+            return FileResponse(requested_file)
+
+        index_file = static_root / "index.html"
+        if not index_file.is_file():
+            raise HTTPException(status_code=404, detail="Frontend is not built")
+        return FileResponse(index_file)
