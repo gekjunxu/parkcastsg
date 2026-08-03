@@ -1,11 +1,36 @@
-# parkcastsg
+# Data maintenance tools
 
-## 🛰️ Data Ingestion Pipeline
+These scripts refresh or generate the static carpark catalogues used by the
+FastAPI service. They are maintenance commands, not a scheduled ingestion or
+database pipeline.
 
-This module handles the automated polling, cleaning, and spatial mapping of Singapore's carpark and weather data. It is designed to run as a scheduled task (e.g., AWS Lambda) every 5 minutes.
+## Responsibilities
 
-## 🏗️ Architecture Overview
-* **Live Polling:** Fetches data from LTA DataMall (Commercial/URA), Data.gov.sg (HDB), and NEA (2-Hour Forecast).
-* **Coordinate Transformation:** Translates HDB SVY21 (X, Y) coordinates into global WGS84 (Lat, Lng) standards.
-* **Spatial Mapping:** Uses the **Haversine Formula** to map every carpark to its geographically nearest weather station.
-* **Data Sink:** Normalizes the unified dataset and "upserts" it into the PostgreSQL RDS instance for the FastAPI backend to consume.
+- `fetch_lta_carparks.py`: downloads LTA carpark metadata and writes the static
+  LTA lookup CSV.
+- `geocode_rates_carparks.py`: geocodes rate-catalogue entries that are not in
+  the HDB or LTA datasets.
+- `generate_coords.py`: converts HDB SVY21 coordinates to WGS84.
+- `fetch_hdb.py` and `fetch_weather.py`: small API inspection helpers.
+- `spatial_mapping.py`: maps carparks to their nearest weather forecast area.
+- `audit_rate_coverage.py`: reports matched and unmatched LTA rate coverage.
+
+Install the maintenance-only dependencies with:
+
+```sh
+pip install -r requirements.txt
+```
+
+Copy `.env.example` to `.env` and use your own LTA DataMall key when running an
+LTA refresh. Review generated diffs before copying CSV output into
+`backend/app/data/`. Rate text should retain its source wording because the
+frontend pricing parser supports time bands, per-entry charges, and free periods.
+
+There is currently no automatic updater for `CarparkRates.csv`. Each public
+release should record where and when its rate catalogue was obtained.
+
+Run the coverage audit after changing rate or LTA data:
+
+```sh
+python src/data_pipeline/audit_rate_coverage.py
+```

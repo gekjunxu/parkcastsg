@@ -24,6 +24,7 @@ import re
 from pathlib import Path
 
 from app.data.lta_carpark_lookup import LTA_CARPARK_LOOKUP
+from app.data.lta_rates_lookup import canonicalise_name
 
 _DATA_DIR = Path(__file__).parent
 _CSV = _DATA_DIR / "supplemental_carparks.csv"
@@ -60,11 +61,11 @@ def _load() -> dict[str, dict]:
     return lookup
 
 
-# Normalised development names from the LTA static CSV.
+# Canonicalised development names from the LTA static CSV.
 # Any supplemental carpark whose key is in this set is already tracked by
 # LTA DataMall and must be excluded to avoid duplicate results.
 LTA_DEVELOPMENT_NAMES: frozenset[str] = frozenset(
-    _normalise(info["development"])
+    canonicalise_name(info["development"])
     for info in LTA_CARPARK_LOOKUP.values()
     if info.get("development")
 )

@@ -1,0 +1,12 @@
+.git
+.github
+.env
+**/.env.local
+**/.venv
+**/venv
+**/node_modules
+**/dist
+**/__pycache__
+**/*.pyc
+src
+lta_carpark_data.csv
