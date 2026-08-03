@@ -7,6 +7,8 @@ on:
 permissions:
   contents: read
 
+# AWS deployment is intentionally disabled while the AWS environment is down.
+# Keep this workflow focused on validation so pushes can still receive a CI check.
 jobs:
   frontend:
     runs-on: ubuntu-latest
