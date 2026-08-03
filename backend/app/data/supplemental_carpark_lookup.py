@@ -61,7 +61,7 @@ def _load() -> dict[str, dict]:
     return lookup
 
 
-# Normalised development names from the LTA static CSV.
+# Canonicalised development names from the LTA static CSV.
 # Any supplemental carpark whose key is in this set is already tracked by
 # LTA DataMall and must be excluded to avoid duplicate results.
 LTA_DEVELOPMENT_NAMES: frozenset[str] = frozenset(

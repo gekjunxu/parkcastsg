@@ -394,6 +394,7 @@ export function getNumericLiveCarRate(carpark: Carpark): number {
       now.getHours(),
     );
     if (!parsed || parsed.basis === 'unknown') return Number.POSITIVE_INFINITY;
+    if (parsed.basis === 'entry') return Number.POSITIVE_INFINITY;
     return parsed.amount;
   }
 
