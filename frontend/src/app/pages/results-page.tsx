@@ -311,7 +311,7 @@ export function ResultsPage() {
                       onClick={() => setRainMode(false)}
                       className='text-[#1A56DB] text-sm font-medium hover:underline'
                     >
-                      Remove sheltered filter
+                      Remove rain filter
                     </button>
                   )}
                 </div>

@@ -115,5 +115,7 @@ export function sortCarparks(
 }
 
 export function filterShelteredCarparks(carparks: Carpark[]): Carpark[] {
-    return carparks.filter((cp) => cp.isSheltered === true);
+    // Keep carparks with unknown shelter status in Rain Mode; only exclude
+    // carparks explicitly marked as unsheltered.
+    return carparks.filter((cp) => cp.isSheltered !== false);
 }

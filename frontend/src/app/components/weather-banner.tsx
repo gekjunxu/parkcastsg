@@ -38,7 +38,7 @@ export function WeatherBanner({ weatherText, isAutoActivated, isRaining, onDismi
                 <Icon className={`w-5 h-5 flex-shrink-0 ${iconClass}`} />
                 <p className={`flex-1 text-sm leading-snug ${textColor}`}>
                     <span className="font-semibold">{weatherText}</span>
-                    {isAutoActivated && " — Rain Mode auto-activated for sheltered carparks."}
+                    {isAutoActivated && " — Rain Mode auto-activated to hide confirmed unsheltered carparks."}
                 </p>
                 <button
                     onClick={onDismiss}
