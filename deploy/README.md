@@ -19,8 +19,9 @@ different `public_path` for simultaneous public branch versions.
 
 Add these repository secrets before running the workflow:
 
-- `TAILSCALE_AUTHKEY`: a reusable, preferably ephemeral Tailscale auth key allowed to
-  join the Tailnet.
+- `TS_OAUTH_CLIENT_ID` and `TS_OAUTH_SECRET`: a Tailscale OAuth client with
+  writable `auth_keys` scope and permission to use `tag:ci`. The workflow uses
+  this client to create an ephemeral, tagged runner node for each deployment.
 - `PRODESK_SSH_PRIVATE_KEY`: the private key whose public key is in
   `~/.ssh/authorized_keys` for the deployment user on `prodesk`.
 
