@@ -8,7 +8,7 @@ deployment_root="${PARKCAST_DEPLOY_ROOT:-$HOME/parkcastsg-deployments}"
 
 slug="$(printf '%s' "$deployment_name" \
   | tr '[:upper:]' '[:lower:]' \
-  | sed -E 's/[^a-z0-9._-]+/-/g; s/^-+//; s/-+$//' \
+  | sed -E 's/[^a-z0-9_-]+/-/g; s/^-+//; s/-+$//' \
   | cut -c1-48)"
 
 if [ -z "$slug" ]; then
