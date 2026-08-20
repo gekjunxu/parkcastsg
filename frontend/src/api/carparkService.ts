@@ -1,7 +1,6 @@
 import type { Carpark, AvailabilityLevel } from '../app/data/carparks'
 import { getNumericLiveCarRate } from '../app/utils/pricingEngine'
-
-const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000'
+import { API_BASE } from '../app/runtime'
 
 // ---------------------------------------------------------------------------
 // Raw shape returned by the backend

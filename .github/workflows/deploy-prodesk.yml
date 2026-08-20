@@ -12,6 +12,11 @@ on:
         required: false
         default: "0"
         type: string
+      public_path:
+        description: "Public HTTPS path on the existing Funnel (for example parkcast)"
+        required: false
+        default: "parkcast"
+        type: string
 
 permissions:
   contents: read
@@ -82,9 +87,14 @@ jobs:
         shell: bash
         env:
           DEPLOYMENT_PORT: ${{ github.event.inputs.port || '0' }}
+          PUBLIC_PATH_INPUT: ${{ github.event.inputs.public_path || 'parkcast' }}
         run: |
           set -euo pipefail
           slug="$(cat "$RUNNER_TEMP/parkcast-deployment-slug")"
+          public_slug="$(printf '%s' "$PUBLIC_PATH_INPUT" | tr '[:upper:]' '[:lower:]' | sed -E 's#^/+##; s#/+$##; s#[^a-z0-9_-]+#-#g; s#-+#-#g; s#^-+##; s#-+$##')"
+          test -n "$public_slug" || { echo "public path must contain a letter or number" >&2; exit 1; }
+          public_path="/$public_slug"
+          printf '%s\n' "$public_path" > "$RUNNER_TEMP/parkcast-public-path"
           remote="$PRODESK_USER@$PRODESK_HOST"
           remote_dir="$PRODESK_DEPLOYMENT_ROOT/$slug"
           ssh "$remote" "mkdir -p '$remote_dir'"
@@ -92,6 +102,8 @@ jobs:
           {
             printf 'PARKCAST_PORT=%s\n' "${DEPLOYMENT_PORT:-0}"
             printf 'ENVIRONMENT=production\n'
+            printf 'APP_BASE_PATH=%s\n' "$public_path"
+            printf 'VITE_BASE_PATH=%s/\n' "$public_path"
             printf 'LTA_API_KEY=%s\n' "$LTA_API_KEY"
             printf 'CORS_ALLOW_ORIGINS=%s\n' "$CORS_ALLOW_ORIGINS"
           } > "$RUNNER_TEMP/parkcast.env"
@@ -105,3 +117,17 @@ jobs:
           remote="$PRODESK_USER@$PRODESK_HOST"
           remote_dir="$PRODESK_DEPLOYMENT_ROOT/$slug"
           ssh "$remote" "tar -xzf '$remote_dir/source.tgz' -C '$remote_dir' && rm -f '$remote_dir/source.tgz' && cd '$remote_dir' && chmod +x deploy/remote-deploy.sh && export PARKCAST_DEPLOY_ROOT=\"\$(pwd)/..\" && ./deploy/remote-deploy.sh '$slug' '${{ github.event.inputs.port || '0' }}'"
+
+      - name: Configure public HTTPS path
+        shell: bash
+        run: |
+          set -euo pipefail
+          slug="$(cat "$RUNNER_TEMP/parkcast-deployment-slug")"
+          public_path="$(cat "$RUNNER_TEMP/parkcast-public-path")"
+          remote="$PRODESK_USER@$PRODESK_HOST"
+          remote_dir="$PRODESK_DEPLOYMENT_ROOT/$slug"
+          port="$(ssh "$remote" "sed -n 's/^PARKCAST_PORT=//p' '$remote_dir/.env'")"
+          case "$port" in
+            ''|*[!0-9]*) echo "could not determine deployed port" >&2; exit 1 ;;
+          esac
+          ssh "$remote" "if sudo -n tailscale funnel --https=443 --set-path='$public_path' --yes --bg http://127.0.0.1:$port; then :; elif tailscale funnel --https=443 --set-path='$public_path' --yes --bg http://127.0.0.1:$port; then :; else echo 'Unable to configure Tailscale Funnel; run the command manually with sudo on prodesk.' >&2; exit 1; fi; (sudo -n tailscale funnel status || tailscale funnel status)"

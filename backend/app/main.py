@@ -24,6 +24,24 @@ else:
 
 app = FastAPI(title="ParkCast SG API")
 
+app_base_path = os.getenv("APP_BASE_PATH", "/").strip()
+if app_base_path and app_base_path != "/":
+    app_base_path = "/" + app_base_path.strip("/")
+else:
+    app_base_path = ""
+
+
+@app.middleware("http")
+async def strip_app_base_path(request, call_next):
+    """Accept requests both with and without the public proxy path prefix."""
+    if app_base_path:
+        request_path = request.scope["path"]
+        if request_path == app_base_path or request_path.startswith(app_base_path + "/"):
+            stripped_path = request_path[len(app_base_path):] or "/"
+            request.scope["path"] = stripped_path
+            request.scope["raw_path"] = stripped_path.encode("utf-8")
+    return await call_next(request)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
