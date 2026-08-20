@@ -10,12 +10,18 @@ in the `18000-18999` range based on the deployment name. This allows `main` and
 several feature branches to run at the same time. Re-running a deployment with
 the same name updates that version in place.
 
+The workflow also builds the frontend with the selected public path (default
+`/parkcast`) and adds that path to the existing Tailscale Funnel on `prodesk`.
+After a successful run, open `https://prodesk.<tailnet>.ts.net/parkcast`. Use a
+different `public_path` for simultaneous public branch versions.
+
 ## Required GitHub secrets
 
 Add these repository secrets before running the workflow:
 
-- `TAILSCALE_AUTHKEY`: a reusable, preferably ephemeral Tailscale auth key allowed to
-  join the Tailnet.
+- `TS_OAUTH_CLIENT_ID` and `TS_OAUTH_SECRET`: a Tailscale OAuth client with
+  writable `auth_keys` scope and permission to use `tag:ci`. The workflow uses
+  this client to create an ephemeral, tagged runner node for each deployment.
 - `PRODESK_SSH_PRIVATE_KEY`: the private key whose public key is in
   `~/.ssh/authorized_keys` for the deployment user on `prodesk`.
 
@@ -29,7 +35,9 @@ verified host key is safer.
 
 The target host must be a Linux Docker host with the Docker Compose plugin. The
 workflow does not expose the service publicly; access it over the Tailnet at
-the URL printed in the workflow log, for example `http://prodesk:18042`.
+the HTTPS URL printed in the workflow log. Tailscale Funnel must already be
+enabled on the host; the workflow adds a path without resetting existing Funnel
+routes.
 
 To remove one test version manually on the server:
 

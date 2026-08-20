@@ -48,6 +48,18 @@ fi
 
 mkdir -p "$stack_dir"
 
+if [ "$requested_port" -eq 0 ] && [ -f "$env_file" ]; then
+  existing_port="$(sed -n 's/^PARKCAST_PORT=//p' "$env_file" | tail -n 1)"
+  case "$existing_port" in
+    ''|*[!0-9]*) ;;
+    *)
+      if [ "$existing_port" -ge 1024 ] && [ "$existing_port" -le 65535 ]; then
+        requested_port="$existing_port"
+      fi
+      ;;
+  esac
+fi
+
 if [ "$requested_port" -eq 0 ]; then
   hash_hex="$(printf '%s' "$slug" | sha256sum | cut -c1-8)"
   requested_port=$((18000 + (16#$hash_hex % 1000)))
