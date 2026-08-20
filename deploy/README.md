@@ -14,15 +14,18 @@ the same name updates that version in place.
 
 Add these repository secrets before running the workflow:
 
-- `TS_AUTHKEY`: a reusable, preferably ephemeral Tailscale auth key allowed to
+- `TAILSCALE_AUTHKEY`: a reusable, preferably ephemeral Tailscale auth key allowed to
   join the Tailnet.
 - `PRODESK_SSH_PRIVATE_KEY`: the private key whose public key is in
   `~/.ssh/authorized_keys` for the deployment user on `prodesk`.
-- `PRODESK_KNOWN_HOSTS`: the verified `ssh-keyscan` entry for `prodesk`.
 
 Optional secrets are `PRODESK_USER` (defaults to `junxu`), `PRODESK_HOST`
 (defaults to `prodesk`), `PRODESK_DEPLOYMENT_ROOT` (defaults to
-`parkcastsg-deployments`), `LTA_API_KEY`, and `CORS_ALLOW_ORIGINS`.
+`parkcastsg-deployments`), `PRODESK_KNOWN_HOSTS`, `LTA_API_KEY`, and
+`CORS_ALLOW_ORIGINS`. The verified `PRODESK_KNOWN_HOSTS` value can also be
+stored as a repository variable rather than a secret. If omitted, the workflow
+uses `ssh-keyscan` after joining the Tailnet and emits a warning; pinning the
+verified host key is safer.
 
 The target host must be a Linux Docker host with the Docker Compose plugin. The
 workflow does not expose the service publicly; access it over the Tailnet at
