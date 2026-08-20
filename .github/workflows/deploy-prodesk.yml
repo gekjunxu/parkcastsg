@@ -68,7 +68,7 @@ jobs:
         run: |
           set -euo pipefail
           raw_name="${DEPLOYMENT_NAME_INPUT:-${GITHUB_REF_NAME}}"
-          slug="$(printf '%s' "$raw_name" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9._-]+/-/g; s/^-+//; s/-+$//' | cut -c1-48)"
+          slug="$(printf '%s' "$raw_name" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9_-]+/-/g; s/^-+//; s/-+$//' | cut -c1-48)"
           test -n "$slug" || { echo "deployment name is empty after sanitization" >&2; exit 1; }
           printf '%s\n' "$slug" > "$RUNNER_TEMP/parkcast-deployment-slug"
           tar --exclude='./.git' --exclude='./node_modules' --exclude='./dist' --exclude='./.env' -czf "$RUNNER_TEMP/parkcast-source.tgz" .
