@@ -38,21 +38,26 @@ jobs:
       - name: Connect runner to Tailnet
         uses: tailscale/github-action@v4
         with:
-          authkey: ${{ secrets.TS_AUTHKEY }}
+          authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
           ping: ${{ secrets.PRODESK_HOST || 'prodesk' }}
 
       - name: Configure SSH
         shell: bash
         env:
           SSH_PRIVATE_KEY: ${{ secrets.PRODESK_SSH_PRIVATE_KEY }}
-          SSH_KNOWN_HOSTS: ${{ secrets.PRODESK_KNOWN_HOSTS }}
+          SSH_KNOWN_HOSTS: ${{ secrets.PRODESK_KNOWN_HOSTS || vars.PRODESK_KNOWN_HOSTS }}
         run: |
           set -euo pipefail
           test -n "$SSH_PRIVATE_KEY" || { echo "PRODESK_SSH_PRIVATE_KEY is not configured" >&2; exit 1; }
-          test -n "$SSH_KNOWN_HOSTS" || { echo "PRODESK_KNOWN_HOSTS is not configured" >&2; exit 1; }
           install -m 700 -d "$HOME/.ssh"
           printf '%s\n' "$SSH_PRIVATE_KEY" > "$HOME/.ssh/id_ed25519"
-          printf '%s\n' "$SSH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          if [ -n "$SSH_KNOWN_HOSTS" ]; then
+            printf '%s\n' "$SSH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          else
+            echo "::warning::PRODESK_KNOWN_HOSTS is not configured; trusting ssh-keyscan output for this run"
+            ssh-keyscan -T 10 "$PRODESK_HOST" > "$HOME/.ssh/known_hosts" 2>/dev/null
+          fi
+          test -s "$HOME/.ssh/known_hosts" || { echo "could not determine the SSH host key for $PRODESK_HOST" >&2; exit 1; }
           chmod 600 "$HOME/.ssh/id_ed25519" "$HOME/.ssh/known_hosts"
 
       - name: Validate Docker on prodesk
