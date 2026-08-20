@@ -77,6 +77,10 @@ The single-container layout is suitable for a small Linux server, NAS, Raspberry
 Pi, or container-capable router. Many consumer OpenWrt routers do not ship with
 Docker and may not have enough writable storage or RAM for Python containers.
 
+For branch-isolated deployments to the Tailnet host `prodesk`, see
+`deploy/README.md`. The GitHub Actions workflow can run `main` and multiple
+feature branches concurrently as separate Compose projects.
+
 Before targeting a router, check its exact model and:
 
 ```sh

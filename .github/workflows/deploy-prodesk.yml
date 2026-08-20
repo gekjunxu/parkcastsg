@@ -1,0 +1,102 @@
+name: Deploy to prodesk
+
+on:
+  workflow_dispatch:
+    inputs:
+      deployment_name:
+        description: "Name for this isolated deployment (defaults to the selected branch)"
+        required: false
+        type: string
+      port:
+        description: "Host port (blank/0 auto-allocates a stable port in 18000-18999)"
+        required: false
+        default: "0"
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: prodesk-${{ github.event.inputs.deployment_name || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      PRODESK_USER: ${{ secrets.PRODESK_USER || 'junxu' }}
+      PRODESK_HOST: ${{ secrets.PRODESK_HOST || 'prodesk' }}
+      PRODESK_DEPLOYMENT_ROOT: ${{ secrets.PRODESK_DEPLOYMENT_ROOT || 'parkcastsg-deployments' }}
+      LTA_API_KEY: ${{ secrets.LTA_API_KEY }}
+      CORS_ALLOW_ORIGINS: ${{ secrets.CORS_ALLOW_ORIGINS }}
+    steps:
+      - name: Check out selected branch
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.ref }}
+
+      - name: Connect runner to Tailnet
+        uses: tailscale/github-action@v4
+        with:
+          authkey: ${{ secrets.TS_AUTHKEY }}
+          ping: ${{ secrets.PRODESK_HOST || 'prodesk' }}
+
+      - name: Configure SSH
+        shell: bash
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.PRODESK_SSH_PRIVATE_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.PRODESK_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$SSH_PRIVATE_KEY" || { echo "PRODESK_SSH_PRIVATE_KEY is not configured" >&2; exit 1; }
+          test -n "$SSH_KNOWN_HOSTS" || { echo "PRODESK_KNOWN_HOSTS is not configured" >&2; exit 1; }
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$SSH_PRIVATE_KEY" > "$HOME/.ssh/id_ed25519"
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_ed25519" "$HOME/.ssh/known_hosts"
+
+      - name: Validate Docker on prodesk
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes "$PRODESK_USER@$PRODESK_HOST" 'docker compose version'
+
+      - name: Prepare deployment archive
+        shell: bash
+        env:
+          DEPLOYMENT_NAME_INPUT: ${{ github.event.inputs.deployment_name }}
+        run: |
+          set -euo pipefail
+          raw_name="${DEPLOYMENT_NAME_INPUT:-${GITHUB_REF_NAME}}"
+          slug="$(printf '%s' "$raw_name" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9._-]+/-/g; s/^-+//; s/-+$//' | cut -c1-48)"
+          test -n "$slug" || { echo "deployment name is empty after sanitization" >&2; exit 1; }
+          printf '%s\n' "$slug" > "$RUNNER_TEMP/parkcast-deployment-slug"
+          tar --exclude='./.git' --exclude='./node_modules' --exclude='./dist' --exclude='./.env' -czf "$RUNNER_TEMP/parkcast-source.tgz" .
+
+      - name: Upload source and runtime configuration
+        shell: bash
+        env:
+          DEPLOYMENT_PORT: ${{ github.event.inputs.port || '0' }}
+        run: |
+          set -euo pipefail
+          slug="$(cat "$RUNNER_TEMP/parkcast-deployment-slug")"
+          remote="$PRODESK_USER@$PRODESK_HOST"
+          remote_dir="$PRODESK_DEPLOYMENT_ROOT/$slug"
+          ssh "$remote" "mkdir -p '$remote_dir'"
+          scp "$RUNNER_TEMP/parkcast-source.tgz" "$remote:$remote_dir/source.tgz"
+          {
+            printf 'PARKCAST_PORT=%s\n' "${DEPLOYMENT_PORT:-0}"
+            printf 'ENVIRONMENT=production\n'
+            printf 'LTA_API_KEY=%s\n' "$LTA_API_KEY"
+            printf 'CORS_ALLOW_ORIGINS=%s\n' "$CORS_ALLOW_ORIGINS"
+          } > "$RUNNER_TEMP/parkcast.env"
+          scp "$RUNNER_TEMP/parkcast.env" "$remote:$remote_dir/.env"
+
+      - name: Build and start isolated Compose project
+        shell: bash
+        run: |
+          set -euo pipefail
+          slug="$(cat "$RUNNER_TEMP/parkcast-deployment-slug")"
+          remote="$PRODESK_USER@$PRODESK_HOST"
+          remote_dir="$PRODESK_DEPLOYMENT_ROOT/$slug"
+          ssh "$remote" "tar -xzf '$remote_dir/source.tgz' -C '$remote_dir' && rm -f '$remote_dir/source.tgz' && cd '$remote_dir' && chmod +x deploy/remote-deploy.sh && export PARKCAST_DEPLOY_ROOT=\"\$(pwd)/..\" && ./deploy/remote-deploy.sh '$slug' '${{ github.event.inputs.port || '0' }}'"
