@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Circle, useMap } from 'react-leaflet';
 import L from 'leaflet';
+import { LocateFixed } from 'lucide-react';
 import { type Carpark, getAvailabilityColor } from '../data/carparks';
 import { type Coordinates } from '../../api/geocode';
 import { calculateLiveRates } from '../utils/pricingEngine';
@@ -12,6 +13,7 @@ interface CarparkMapProps {
     onPinClick: (id: string) => void;
     userLocation?: Coordinates | null;
     userAccuracy?: number; // metres
+    recenterLocation?: Coordinates | null;
 }
 
 // Custom marker icon component
@@ -217,6 +219,23 @@ function MapContent({
 export function CarparkMap(props: CarparkMapProps) {
     // Default center (Marina Bay, Singapore)
     const defaultCenter: [number, number] = [1.2816, 103.8544];
+    const mapRef = useRef<L.Map>(null);
+    const target = props.recenterLocation ?? props.userLocation;
+    const targetCenter: [number, number] = target
+        ? [target.lat, target.lng]
+        : defaultCenter;
+    const targetZoom = target ? 15 : 14;
+    const recenterLabel = props.userLocation
+        ? 'Recenter on my location'
+        : props.recenterLocation
+            ? 'Recenter on search location'
+            : 'Recenter Singapore map';
+
+    const handleRecenter = () => {
+        mapRef.current?.flyTo(targetCenter, targetZoom, {
+            duration: 0.8,
+        });
+    };
 
     return (
         <div className="h-full w-full relative">
@@ -225,9 +244,20 @@ export function CarparkMap(props: CarparkMapProps) {
                 zoom={14}
                 className="h-full w-full"
                 zoomControl={true}
+                ref={mapRef}
             >
                 <MapContent {...props} showAccuracyCircle={true} />
             </MapContainer>
+
+            <button
+                type="button"
+                onClick={handleRecenter}
+                className="absolute bottom-4 right-4 z-[1000] flex h-11 w-11 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-700 shadow-lg transition-colors hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#1A56DB]/30"
+                aria-label={recenterLabel}
+                title={recenterLabel}
+            >
+                <LocateFixed className="h-5 w-5 text-[#1A56DB]" />
+            </button>
 
             {/* Legend */}
             <div className="absolute bottom-4 left-4 bg-white rounded-lg shadow-lg p-3 z-[1000] text-xs">

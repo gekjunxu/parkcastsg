@@ -348,6 +348,7 @@ export function ResultsPage() {
             onPinClick={handleMapPinClick}
             userLocation={coordsFromParams}
             userAccuracy={userAccuracy ?? undefined}
+            recenterLocation={searchCoords ?? coordsFromParams}
           />
         </div>
       </div>
