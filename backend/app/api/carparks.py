@@ -231,7 +231,7 @@ async def _fetch_lta_carparks(lat: float, lng: float, radius: int) -> list[Carpa
     within the requested radius — and never called at all if the static CSV
     has not been generated yet.
 
-    Returns an empty list (degrades gracefully) when:
+    Static locations are still returned with unknown availability when:
     - ``LTA_CARPARK_LOOKUP`` is empty (CSV not yet generated)
     - No LTA carparks lie within ``radius``
     - ``LTA_API_KEY`` is unset
@@ -249,53 +249,59 @@ async def _fetch_lta_carparks(lat: float, lng: float, radius: int) -> list[Carpa
     if not nearby:
         return []  # nothing in range — skip the API call entirely
 
-    if not LTA_API_KEY:
-        logging.warning("LTA_API_KEY not configured; skipping LTA carparks")
-        return []
-
-    # 2. Fetch live availability for all carparks (API returns the full dataset).
-    lta_fetch_timestamp = datetime.now(timezone.utc).isoformat()
-    try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.get(
-                LTA_AVAILABILITY_URL,
-                headers={"AccountKey": LTA_API_KEY, "accept": "application/json"},
-            )
-            resp.raise_for_status()
-    except httpx.HTTPError as exc:
-        logging.warning(
-            f"Failed to fetch LTA carpark availability ({exc}); returning no LTA results"
-        )
-        return []  # degrade gracefully
-
-    try:
-        data = resp.json()
-    except ValueError:
-        return []
-
-    if not isinstance(data, dict) or not isinstance(data.get("value"), list):
-        return []
-
-    # 3. Build an availability dict: raw CarParkID -> available car lots.
-    #    Sum across multiple LotType="C" entries for the same CarParkID.
     availability: dict[str, int] = {}
-    for entry in data["value"]:
-        if not isinstance(entry, dict):
-            continue
-        if entry.get("Agency", "") in _HDB_AGENCIES:
-            continue
-        if entry.get("LotType", "") != "C":
-            continue
-        cp_id = str(entry.get("CarParkID", "")).strip()
-        if cp_id:
-            availability[cp_id] = availability.get(cp_id, 0) + int(entry.get("AvailableLots", 0))
+    lta_fetch_timestamp: str | None = None
 
-    # 4. Join static metadata with live availability counts.
+    if not LTA_API_KEY:
+        logging.warning("LTA_API_KEY not configured; returning static LTA locations")
+    else:
+        # 2. Fetch live availability for all carparks (API returns the full dataset).
+        lta_fetch_timestamp = datetime.now(timezone.utc).isoformat()
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.get(
+                    LTA_AVAILABILITY_URL,
+                    headers={"AccountKey": LTA_API_KEY, "accept": "application/json"},
+                )
+                resp.raise_for_status()
+        except httpx.HTTPError as exc:
+            logging.warning(
+                f"Failed to fetch LTA carpark availability ({exc}); using static LTA locations"
+            )
+        else:
+            try:
+                data = resp.json()
+            except ValueError:
+                logging.warning(
+                    "LTA carpark availability returned invalid JSON; using static LTA locations"
+                )
+            else:
+                if not isinstance(data, dict) or not isinstance(data.get("value"), list):
+                    logging.warning(
+                        "LTA carpark availability had an unexpected shape; using static LTA locations"
+                    )
+                else:
+                    # 3. Build an availability dict: raw CarParkID -> available car lots.
+                    #    Sum across multiple LotType="C" entries for the same CarParkID.
+                    for entry in data["value"]:
+                        if not isinstance(entry, dict):
+                            continue
+                        if entry.get("Agency", "") in _HDB_AGENCIES:
+                            continue
+                        if entry.get("LotType", "") != "C":
+                            continue
+                        cp_id = str(entry.get("CarParkID", "")).strip()
+                        if cp_id:
+                            availability[cp_id] = availability.get(cp_id, 0) + int(entry.get("AvailableLots", 0))
+
+    # 4. Join static metadata with live availability counts. If the live feed
+    # was unavailable, the static entry remains useful for location and rate
+    # discovery while its availability is explicitly marked as unknown.
     results: list[CarparkAvailability] = []
     for cp_id, info in nearby.items():
         dist = _haversine(lat, lng, info["lat"], info["lng"])
         available = availability.get(cp_id)
-        has_live_availability = available is not None
+        has_live_availability = available is not None and lta_fetch_timestamp is not None
         available_lots = available if available is not None else 0
         development = info["development"]
         prefixed_id = f"{LTA_ID_PREFIX}{cp_id}"
@@ -610,9 +616,8 @@ async def get_all_carparks():
 async def get_nearby_carparks(lat: float, lng: float, radius: int = 500):
     """
     Return HDB, LTA, and supplemental carparks within `radius` metres of
-    (lat, lng) with live availability where available.  LTA results require
-    LTA_API_KEY to be configured; if absent the endpoint returns HDB + any
-    supplemental results only.
+    (lat, lng) with live availability where available.  Without an LTA key,
+    static LTA locations are still returned with unknown availability.
     """
     hdb_results, lta_results = await asyncio.gather(
         _fetch_hdb_carparks(lat, lng, radius),

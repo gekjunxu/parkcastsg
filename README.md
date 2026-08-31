@@ -44,8 +44,9 @@ docker compose up --build -d
 Open `http://localhost:8080`. Health and API documentation are available at
 `/health` and `/docs`.
 
-The LTA key is optional. Without it, HDB live availability and the supplemental
-rate catalogue continue to work.
+The LTA key is optional. Without it, HDB live availability, static LTA
+locations, and the supplemental rate catalogue continue to work; LTA entries
+show an explicit unavailable-live-data state until a key is configured.
 
 ## Local development
 

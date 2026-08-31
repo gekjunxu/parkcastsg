@@ -18,6 +18,9 @@ import {
   ArrowLeft,
   Layers,
   RotateCcw,
+  LocateFixed,
+  List,
+  ChevronUp,
 } from 'lucide-react'
 import {
   getAllCarparks,
@@ -262,7 +265,7 @@ const ExplorerPanelContent = memo(function ExplorerPanelContent({
           <div className="flex-1">
             <h1 className="text-lg font-bold text-gray-900 leading-tight">Map Explorer</h1>
             <p className="text-[11px] text-gray-500 font-medium">
-              Singapore · Live availability for HDB and selected LTA carparks
+              Singapore · Live HDB data and mapped LTA carparks
             </p>
             <p className="text-[10px] text-gray-400 font-medium mt-0.5">
               Some private/commercial carparks do not publish live lot counts.
@@ -273,7 +276,7 @@ const ExplorerPanelContent = memo(function ExplorerPanelContent({
           </div>
           <div className="flex items-center gap-1.5 rounded-full px-2.5 py-1 border bg-blue-50 border-blue-100">
             <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-            <span className="text-[10px] font-bold uppercase tracking-wide text-blue-700">HDB/LTA Live</span>
+            <span className="text-[10px] font-bold uppercase tracking-wide text-blue-700">HDB live · LTA map</span>
           </div>
         </div>
 
@@ -362,7 +365,7 @@ const ExplorerPanelContent = memo(function ExplorerPanelContent({
         )}
       </div>
 
-      <div className="panel-scroll flex-1 overflow-y-auto bg-[#F9FAFB] p-4 space-y-3">
+      <div className="panel-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain bg-[#F9FAFB] p-4 space-y-3">
         {isLoading ? (
           Array.from({ length: 6 }).map((_, i) => (
             <div key={i} className="bg-white border border-gray-100 rounded-xl h-20 animate-pulse shadow-sm" />
@@ -463,6 +466,27 @@ export function MapExplorerPage() {
   const mapRef = useRef<L.Map>(null)
 
   const isSearchMode = searchCoords !== null
+  const recenterTarget = useMemo(
+    () => {
+      if (userLocation) return { ...userLocation, zoom: SEARCH_ZOOM }
+      if (searchCoords) return { ...searchCoords, zoom: SEARCH_ZOOM }
+      return { lat: SG_CENTER[0], lng: SG_CENTER[1], zoom: SG_ZOOM }
+    },
+    [searchCoords, userLocation],
+  )
+  const recenterLabel = userLocation
+    ? 'Recenter on my location'
+    : searchCoords
+      ? 'Recenter on search location'
+      : 'Recenter Singapore map'
+
+  const handleRecenter = useCallback(() => {
+    mapRef.current?.flyTo(
+      [recenterTarget.lat, recenterTarget.lng],
+      recenterTarget.zoom,
+      { duration: 0.8 },
+    )
+  }, [recenterTarget])
 
   // ── Load all carparks once ─────────────────────────────────────────────────
   useEffect(() => {
@@ -553,6 +577,7 @@ export function MapExplorerPage() {
           setSelectedCarpark(null)
           setFlyTarget({ lat: coords.lat, lng: coords.lng, zoom: SEARCH_ZOOM, duration: 1.2 })
           await fetchNearby(coords, searchRadius)
+          setMobilePanelOpen(false)
         } else {
           setSearchError('Location not found in Singapore.')
         }
@@ -578,6 +603,7 @@ export function MapExplorerPage() {
       setSelectedCarpark(null)
       setFlyTarget({ lat: coords.lat, lng: coords.lng, zoom: SEARCH_ZOOM, duration: 1.2 })
       await fetchNearby(coords, searchRadius)
+      setMobilePanelOpen(false)
     } catch (err) {
       if (!cancelRef.current)
         setSearchError(
@@ -733,12 +759,14 @@ export function MapExplorerPage() {
 
           {/* Mobile drawer trigger */}
           <button
+            type="button"
             onClick={() => setMobilePanelOpen(true)}
-            className="md:hidden absolute top-4 right-4 z-[1000] bg-white border border-gray-200 rounded-lg px-3 py-2 text-gray-700 shadow-md hover:bg-gray-50 transition-colors flex items-center gap-1.5"
+            className="md:hidden absolute top-4 right-4 z-[1000] bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-gray-700 shadow-md hover:bg-gray-50 transition-colors flex items-center gap-1.5"
+            aria-label="Open carpark list and search"
           >
-            <Search size={14} className="text-blue-600" />
+            <List size={14} className="text-blue-600" />
             <span className="text-[12px] font-bold">
-              {isSearchMode ? `${displayedCarparks.length} results` : 'Search & results'}
+              {isSearchMode ? `${displayedCarparks.length} results` : 'Browse carparks'}
             </span>
           </button>
 
@@ -806,6 +834,44 @@ export function MapExplorerPage() {
             )}
           </MapContainer>
 
+          {/* Mobile peek bar keeps the list discoverable without covering the map. */}
+          <div className="md:hidden absolute bottom-3 left-3 right-[4.5rem] z-[1000]">
+            <button
+              type="button"
+              onClick={() => setMobilePanelOpen(true)}
+              className="flex min-h-12 w-full items-center gap-3 rounded-2xl border border-gray-200 bg-white/95 px-3.5 py-2.5 text-left shadow-lg backdrop-blur-sm transition-colors hover:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+              aria-label="Browse carpark list"
+            >
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+                <List size={16} />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[12px] font-bold text-gray-900">
+                  {selectedCarpark
+                    ? allCarparks.find((cp) => cp.id === selectedCarpark)?.name ?? 'Selected carpark'
+                    : isSearchMode
+                      ? `${displayedCarparks.length} carparks nearby`
+                      : `${displayedCarparks.length} carparks across Singapore`}
+                </span>
+                <span className="block text-[10px] font-medium text-gray-500">
+                  {selectedCarpark ? 'View details or browse the list' : 'Tap to search, sort, and filter'}
+                </span>
+              </span>
+              <ChevronUp size={17} className="shrink-0 text-gray-400" />
+            </button>
+          </div>
+
+          {/* Recenter after panning or zooming away from the active location. */}
+          <button
+            type="button"
+            onClick={handleRecenter}
+            className="absolute bottom-[76px] right-3 z-[1000] flex h-11 w-11 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-700 shadow-lg transition-colors hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500/30 md:bottom-5 md:right-[4.5rem]"
+            aria-label={recenterLabel}
+            title={recenterLabel}
+          >
+            <LocateFixed size={19} className="text-blue-600" />
+          </button>
+
           {/* Zoom controls */}
           <div className="absolute bottom-[20px] right-3 md:right-4 z-[1000] flex flex-col shadow-md rounded-xl overflow-hidden bg-white border border-gray-200">
             {[
@@ -840,8 +906,8 @@ export function MapExplorerPage() {
         </div>
 
         <Drawer open={mobilePanelOpen} onOpenChange={setMobilePanelOpen}>
-          <DrawerContent className="md:hidden max-h-[82vh]">
-            <div className="h-full overflow-y-auto">
+          <DrawerContent className="md:hidden h-[82vh] max-h-[82vh] overflow-hidden">
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
               <ExplorerPanelContent
                 showBackButton={false}
                 isDrawer
