@@ -1,19 +1,32 @@
 # Deploying ParkCastSG to `prodesk`
 
-The `Deploy to prodesk` workflow is a manual, branch-aware deployment. In
-GitHub, open **Actions → Deploy to prodesk → Run workflow**, select the branch
-or tag to test, and optionally provide a deployment name and host port.
+The `Deploy to prodesk` workflow automatically deploys successful push-based CI
+runs for the two persistent environments:
+
+- `main` → deployment `main` at `/parkcast` (production)
+- `staging` → deployment `parkcastsit` at `/parkcastsit` (test/staging)
+
+It also remains manually runnable from **Actions → Deploy to prodesk → Run
+workflow** for feature branches, emergency redeploys, or custom paths.
+Leaving the deployment name and public path blank uses the mapping above.
 
 Each deployment gets its own Compose project and directory under
 `~/parkcastsg-deployments`. Leaving the port as `0` assigns a stable unused port
-in the `18000-18999` range based on the deployment name. This allows `main` and
-several feature branches to run at the same time. Re-running a deployment with
-the same name updates that version in place.
+in the `18000-18999` range based on the deployment name. This allows production,
+staging, and several feature branches to run at the same time. Re-running a
+deployment with the same name updates that version in place.
 
-The workflow also builds the frontend with the selected public path (default
-`/parkcast`) and adds that path to the existing Tailscale Funnel on `prodesk`.
-After a successful run, open `https://prodesk.<tailnet>.ts.net/parkcast`. Use a
-different `public_path` for simultaneous public branch versions.
+The workflow also builds the frontend with the selected public path and adds
+that path to the existing Tailscale Funnel on `prodesk`. It deploys only after
+the CI workflow succeeds for a `main` or `staging` push. After a successful
+run, open `https://prodesk.<tailnet>.ts.net/parkcast` or
+`https://prodesk.<tailnet>.ts.net/parkcastsit`. Use a different `public_path`
+for simultaneous public feature-branch versions.
+
+The deployment job names GitHub environments `production` and `staging`. Add
+required reviewers to the `production` environment in **Settings → Environments**
+if production deployments should pause for approval; the CI-success gate still
+applies either way.
 
 ## Required GitHub secrets
 

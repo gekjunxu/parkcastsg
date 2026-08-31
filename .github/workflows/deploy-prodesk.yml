@@ -1,6 +1,12 @@
 name: Deploy to prodesk
 
 on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches:
+      - main
+      - staging
   workflow_dispatch:
     inputs:
       deployment_name:
@@ -13,9 +19,9 @@ on:
         default: "0"
         type: string
       public_path:
-        description: "Public HTTPS path on the existing Funnel (for example parkcast)"
+        description: "Public HTTPS path on the existing Funnel (blank uses the branch mapping)"
         required: false
-        default: "parkcast"
+        default: ""
         type: string
 
 permissions:
@@ -27,7 +33,16 @@ concurrency:
 
 jobs:
   deploy:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (
+        github.event_name == 'workflow_run' &&
+        github.event.workflow_run.event == 'push' &&
+        github.event.workflow_run.conclusion == 'success'
+      )
     runs-on: ubuntu-latest
+    environment:
+      name: ${{ (github.event.workflow_run.head_branch || github.ref_name) == 'main' && 'production' || 'staging' }}
     env:
       PRODESK_USER: ${{ secrets.PRODESK_USER || 'junxu' }}
       PRODESK_HOST: ${{ secrets.PRODESK_HOST || 'prodesk' }}
@@ -38,7 +53,7 @@ jobs:
       - name: Check out selected branch
         uses: actions/checkout@v5
         with:
-          ref: ${{ github.ref }}
+          ref: ${{ github.event.workflow_run.head_sha || github.ref }}
 
       - name: Connect runner to Tailnet
         uses: tailscale/github-action@v4
@@ -77,9 +92,17 @@ jobs:
         shell: bash
         env:
           DEPLOYMENT_NAME_INPUT: ${{ github.event.inputs.deployment_name }}
+          DEPLOY_BRANCH: ${{ github.event.workflow_run.head_branch || github.ref_name }}
         run: |
           set -euo pipefail
-          raw_name="${DEPLOYMENT_NAME_INPUT:-${GITHUB_REF_NAME}}"
+          raw_name="${DEPLOYMENT_NAME_INPUT:-}"
+          if [ -z "$raw_name" ]; then
+            case "$DEPLOY_BRANCH" in
+              main) raw_name="main" ;;
+              staging) raw_name="parkcastsit" ;;
+              *) raw_name="$DEPLOY_BRANCH" ;;
+            esac
+          fi
           slug="$(printf '%s' "$raw_name" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9_-]+/-/g; s/^-+//; s/-+$//' | cut -c1-48)"
           test -n "$slug" || { echo "deployment name is empty after sanitization" >&2; exit 1; }
           printf '%s\n' "$slug" > "$RUNNER_TEMP/parkcast-deployment-slug"
@@ -89,11 +112,20 @@ jobs:
         shell: bash
         env:
           DEPLOYMENT_PORT: ${{ github.event.inputs.port || '0' }}
-          PUBLIC_PATH_INPUT: ${{ github.event.inputs.public_path || 'parkcast' }}
+          PUBLIC_PATH_INPUT: ${{ github.event.inputs.public_path }}
+          DEPLOY_BRANCH: ${{ github.event.workflow_run.head_branch || github.ref_name }}
         run: |
           set -euo pipefail
           slug="$(cat "$RUNNER_TEMP/parkcast-deployment-slug")"
-          public_slug="$(printf '%s' "$PUBLIC_PATH_INPUT" | tr '[:upper:]' '[:lower:]' | sed -E 's#^/+##; s#/+$##; s#[^a-z0-9_-]+#-#g; s#-+#-#g; s#^-+##; s#-+$##')"
+          public_path_input="${PUBLIC_PATH_INPUT:-}"
+          if [ -z "$public_path_input" ]; then
+            case "$DEPLOY_BRANCH" in
+              main) public_path_input="parkcast" ;;
+              staging) public_path_input="parkcastsit" ;;
+              *) public_path_input="$DEPLOY_BRANCH" ;;
+            esac
+          fi
+          public_slug="$(printf '%s' "$public_path_input" | tr '[:upper:]' '[:lower:]' | sed -E 's#^/+##; s#/+$##; s#[^a-z0-9_-]+#-#g; s#-+#-#g; s#^-+##; s#-+$##')"
           test -n "$public_slug" || { echo "public path must contain a letter or number" >&2; exit 1; }
           public_path="/$public_slug"
           printf '%s\n' "$public_path" > "$RUNNER_TEMP/parkcast-public-path"
