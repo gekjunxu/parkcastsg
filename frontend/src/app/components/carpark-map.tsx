@@ -44,6 +44,9 @@ const ParkingPins = memo(function ParkingPins({ carparks, selectedCarparkId, onP
       chunkedLoading: true, chunkInterval: 40, chunkDelay: 16,
       removeOutsideVisibleBounds: true, showCoverageOnHover: false,
       maxClusterRadius: 52, animate: false,
+      // Nearby searches start at zoom 15: show each carpark at its own location.
+      // A fixed cutoff avoids building clusters for the closer zoom levels.
+      disableClusteringAtZoom: 15,
       chunkProgress: (processed, total) => {
         if (import.meta.env.DEV && processed === total) console.debug(`Parking map: ${total} markers prepared in ${Math.round(performance.now() - started)}ms`)
       },
@@ -132,7 +135,7 @@ export const CarparkMap = memo(function CarparkMap(props: CarparkMapProps) {
       <span><i style={{ background: '#F59E0B' }} /> Moderate / low</span>
       <span><i style={{ background: '#EF4444' }} /> Full</span>
       <span><i style={{ background: '#9CA3AF' }} /> P · Not tracked</span>
-      <small>Numbered groups show carpark counts. Tap to zoom in.</small>
+      <small>Zoomed-out groups show carpark counts. Zoom in to see individual carparks.</small>
     </div>}
   </div>
 })
