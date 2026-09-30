@@ -8,11 +8,11 @@ import { LoadingSkeleton } from '../components/loading-skeleton'
 import { NavigationChooserModal } from '../components/navigation-chooser-modal'
 import { sortCarparks, filterShelteredCarparks, getAvailabilityText, type Carpark } from '../data/carparks'
 import { geocodeQuery, type Coordinates } from '../../api/geocode'
-import { getNearbyCarparks, getAllCarparks, transformCarpark } from '../../api/carparkService'
+import { getNearbyCarparks, getAllCarparks, getCarparksInArea, transformCarpark } from '../../api/carparkService'
 import { getUserLocation } from '../../api/geolocation'
 import { getWeatherForecast, type WeatherData } from '../../api/weatherService'
 import { calculateLiveRates } from '../utils/pricingEngine'
-import { carparksInViewport, type MapViewport } from '../utils/mapViewport'
+import { areaFromParams, areaSearchUrl, canSearchViewport, carparksInViewport, type MapViewport } from '../utils/mapViewport'
 import '../../styles/parking-map.css'
 
 const SG = { lat: 1.3521, lng: 103.8198 }
@@ -43,12 +43,13 @@ export function ResultsPage() {
   const [params] = useSearchParams()
   const browsing = location.pathname === '/map'
   const queryKey = params.toString()
+  const searchArea = areaFromParams(params)
   const destination = params.get('q') || ''
   const parsedLat = Number(params.get('lat')), parsedLng = Number(params.get('lng'))
   const hasCoords = params.has('lat') && params.has('lng') && Number.isFinite(parsedLat) && Number.isFinite(parsedLng) && Math.abs(parsedLat) <= 90 && Math.abs(parsedLng) <= 180
   const radius = [300, 500, 1000, 2000].includes(Number(params.get('radius'))) ? Number(params.get('radius')) : 1000
   const initialCenter = hasCoords ? { lat: parsedLat, lng: parsedLng } : SG
-  const initialZoom = browsing ? Math.max(10, Math.min(18, Number(params.get('zoom')) || 12)) : 15
+  const initialZoom = searchArea?.zoom ?? (browsing ? Math.max(10, Math.min(18, Number(params.get('zoom')) || 12)) : 15)
   const [query, setQuery] = useState(destination)
   const [data, setData] = useState<Carpark[]>([])
   const [loading, setLoading] = useState(true)
@@ -82,6 +83,7 @@ export function ResultsPage() {
   useEffect(() => {
     const id = ++requestId.current
     let cancelled = false
+    const controller = new AbortController()
     setLoading(true); setError(null); setWeather(null); setLimit(PAGE_SIZE)
     setSelected(savedViews.get(location.key)?.selected ?? null)
     setData([])
@@ -101,14 +103,16 @@ export function ResultsPage() {
           if (!coords) throw new Error('Location not found. Try a Singapore address or postal code.')
           setSearchCoords(coords)
           if (focusedSearch.current !== `search:${queryKey}`) {
-            setTarget(t => ({ center: coords, zoom: radius <= 500 ? 16 : radius <= 1000 ? 15 : 14, revision: t.revision + 1 }))
+            setTarget(t => ({ center: coords, zoom: searchArea?.zoom ?? (radius <= 500 ? 16 : radius <= 1000 ? 15 : 14), revision: t.revision + 1 }))
             focusedSearch.current = `search:${queryKey}`
           }
           // Weather must never delay the parking results.
           getWeatherForecast(coords.lat, coords.lng).then(w => {
             if (!cancelled) { setWeather(w); if (w.isRaining) setRainMode(true) }
           }).catch(() => { /* Weather is optional. Parking remains usable. */ })
-          const raw = await getNearbyCarparks(coords.lat, coords.lng, radius)
+          const raw = searchArea
+            ? await getCarparksInArea(searchArea, controller.signal)
+            : await getNearbyCarparks(coords.lat, coords.lng, radius, controller.signal)
           if (cancelled) return
           setData(raw.map(transformCarpark)); setUpdated(Date.now())
         }
@@ -119,7 +123,7 @@ export function ResultsPage() {
       }
     }
     load()
-    return () => { cancelled = true }
+    return () => { cancelled = true; controller.abort() }
   }, [browsing, queryKey, refresh])
 
   const pins = useMemo(() => rainMode ? filterShelteredCarparks(data) : data, [data, rainMode])
@@ -138,6 +142,11 @@ export function ResultsPage() {
   }
   function explore(reset = false) {
     setFiltersOpen(false); setListOpen(false)
+    if (!reset && viewport) {
+      if (!canSearchViewport(viewport)) return
+      navigate(areaSearchUrl(viewport))
+      return
+    }
     const center = reset ? SG : viewport?.center ?? target.center
     const zoom = reset ? 12 : viewport?.zoom ?? target.zoom
     setTarget(t => ({ center, zoom, revision: t.revision + 1 }))
@@ -154,6 +163,7 @@ export function ResultsPage() {
   }
   function changeRadius(value: number) {
     const next = new URLSearchParams(params)
+    for (const key of ['north', 'south', 'east', 'west', 'zoom']) next.delete(key)
     next.set('radius', String(value))
     navigate(`/results?${next}`)
   }
@@ -168,7 +178,7 @@ export function ResultsPage() {
     setTarget(t => ({ center: { lat: cp.lat, lng: cp.lng }, zoom: 18, revision: t.revision + 1 }))
   }
   const title = browsing ? 'Explore Singapore' : destination || 'Near your location'
-  const subtitle = browsing ? 'in this map area' : `within ${radius >= 1000 ? `${radius / 1000}km` : `${radius}m`}`
+  const subtitle = browsing ? 'in this map area' : searchArea ? 'in the searched map area' : `within ${radius >= 1000 ? `${radius / 1000}km` : `${radius}m`}`
 
   return <main className={`parking-shell${listOpen ? ' list-open' : ''}${chosen ? ' has-selection' : ''}`}>
     <header className="parking-header">
@@ -178,12 +188,12 @@ export function ResultsPage() {
         <button type="submit" className="parking-search-submit" disabled={!query.trim()} aria-label="Search carparks"><Search size={20} /></button>
       </form>
       <div className="parking-toolbar">
-        <div className="parking-context"><strong>{title}</strong><span>{browsing ? 'Pan to discover parking' : `${radius >= 1000 ? `${radius / 1000}km` : `${radius}m`} around destination`}</span></div>
+        <div className="parking-context"><strong>{title}</strong><span>{browsing || searchArea ? 'Pan to discover parking' : `${radius >= 1000 ? `${radius / 1000}km` : `${radius}m`} around destination`}</span></div>
         <button className={`parking-tool${rainMode ? ' active' : ''}`} onClick={() => setFiltersOpen(!filtersOpen)} aria-expanded={filtersOpen} aria-controls="parking-filters"><SlidersHorizontal size={18} /><span>Filters{rainMode ? ' · 1' : ''}</span></button>
         <button className="parking-icon-button" onClick={handleUseLocation} disabled={locating} aria-label={locating ? 'Finding your location' : 'Use my location'}><Navigation size={20} className={locating ? 'animate-pulse' : ''} /></button>
       </div>
       {filtersOpen && <section id="parking-filters" className="parking-filters" aria-label="Parking filters">
-        {!browsing && <div className="parking-radius" role="group" aria-label="Search radius">{[300, 500, 1000, 2000].map(r => <button key={r} onClick={() => changeRadius(r)} aria-pressed={radius === r}>{r >= 1000 ? `${r / 1000}km` : `${r}m`}</button>)}</div>}
+        {!browsing && !searchArea && <div className="parking-radius" role="group" aria-label="Search radius">{[300, 500, 1000, 2000].map(r => <button key={r} onClick={() => changeRadius(r)} aria-pressed={radius === r}>{r >= 1000 ? `${r / 1000}km` : `${r}m`}</button>)}</div>}
         <FilterChips selectedFilter={sort} rainMode={rainMode} onFilterChange={setSort} onRainModeToggle={() => setRainMode(v => !v)} />
         <p>{browsing ? 'Closest is measured from the centre of the map. ' : ''}Rain mode excludes known open-air carparks.</p>
         {!browsing && <button className="parking-text-button" onClick={() => explore(true)}>Explore all Singapore carparks</button>}
@@ -195,8 +205,8 @@ export function ResultsPage() {
 
     <div className="parking-workspace">
       <div className="parking-map-area">
-        <CarparkMap carparks={pins} selectedCarparkId={selected} onPinClick={onPinClick} userLocation={userLocation} userAccuracy={accuracy} searchLocation={browsing ? null : searchCoords} searchRadius={radius} target={target} onViewportChange={setViewport} onMapMoved={onMapMoved} />
-        {!browsing && moved && !loading && <button className="parking-search-area" onClick={() => explore()}><Search size={16} />Search this area</button>}
+        <CarparkMap carparks={pins} selectedCarparkId={selected} onPinClick={onPinClick} userLocation={userLocation} userAccuracy={accuracy} searchLocation={browsing || searchArea ? null : searchCoords} searchRadius={radius} target={target} onViewportChange={setViewport} onMapMoved={onMapMoved} />
+        {!browsing && moved && !loading && <button className="parking-search-area" disabled={!viewport || !canSearchViewport(viewport)} onClick={() => explore()}><Search size={16} />{viewport && canSearchViewport(viewport) ? 'Search this area' : 'Zoom in to search this area'}</button>}
         {browsing && !loading && !error && <div className="parking-map-hint">Tap a group to zoom · Pins show available lots</div>}
         {loading && <div className="parking-map-status" role="status"><RefreshCw size={16} className="animate-spin" />Loading carparks…</div>}
       </div>

@@ -4,7 +4,7 @@ import asyncio
 import logging
 import os
 from datetime import datetime, timezone
-from math import atan2, cos, radians, sin, sqrt
+from math import atan2, ceil, cos, isfinite, radians, sin, sqrt
 
 import httpx
 from fastapi import APIRouter, HTTPException
@@ -631,6 +631,21 @@ async def get_nearby_carparks(lat: float, lng: float, radius: int = 500):
             seen[cp.id] = cp
     results = sorted(seen.values(), key=lambda x: x.distance)
     return results
+
+
+@router.get("/carparks/area", response_model=list[CarparkAvailability])
+async def get_carparks_in_area(north: float, south: float, east: float, west: float):
+    """Return only the requested map rectangle, never the island-wide payload."""
+    if not all(isfinite(v) for v in (north, south, east, west)) or not (
+        -90 <= south < north <= 90 and -180 <= west < east <= 180
+    ):
+        raise HTTPException(status_code=422, detail="Invalid map bounds")
+    if north - south > 0.12 or east - west > 0.12:
+        raise HTTPException(status_code=422, detail="Zoom in to search this area")
+    lat, lng = (north + south) / 2, (east + west) / 2
+    radius = ceil(max(_haversine(lat, lng, y, x) for y in (north, south) for x in (east, west)))
+    candidates = await get_nearby_carparks(lat, lng, radius)
+    return [cp for cp in candidates if south <= cp.lat <= north and west <= cp.lng <= east]
 
 
 @router.get("/carparks/{carpark_id}", response_model=CarparkAvailability)

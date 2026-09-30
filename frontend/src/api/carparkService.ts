@@ -1,6 +1,7 @@
 import type { Carpark, AvailabilityLevel } from '../app/data/carparks'
 import { getNumericLiveCarRate } from '../app/utils/pricingEngine'
 import { API_BASE } from '../app/runtime'
+import type { MapViewport } from '../app/utils/mapViewport'
 
 // ---------------------------------------------------------------------------
 // Raw shape returned by the backend
@@ -45,9 +46,10 @@ export async function getNearbyCarparks(
   lat: number,
   lng: number,
   radius: number,
+  signal?: AbortSignal,
 ): Promise<NearbyCarpark[]> {
   const url = `${API_BASE}/api/v1/carparks/nearby?lat=${lat}&lng=${lng}&radius=${radius}`
-  const res = await fetch(url)
+  const res = await fetch(url, { signal })
   if (!res.ok) {
     throw new Error(`Carpark API error ${res.status}`)
   }
@@ -60,6 +62,13 @@ export async function getAllCarparks(): Promise<NearbyCarpark[]> {
   if (!res.ok) {
     throw new Error(`Carpark API error ${res.status}`)
   }
+  return res.json()
+}
+
+export async function getCarparksInArea(bounds: MapViewport, signal?: AbortSignal): Promise<NearbyCarpark[]> {
+  const query = new URLSearchParams({ north: String(bounds.north), south: String(bounds.south), east: String(bounds.east), west: String(bounds.west) })
+  const res = await fetch(`${API_BASE}/api/v1/carparks/area?${query}`, { signal })
+  if (!res.ok) throw new Error(`Carpark API error ${res.status}`)
   return res.json()
 }
 
