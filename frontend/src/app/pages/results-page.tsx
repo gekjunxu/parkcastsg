@@ -205,7 +205,7 @@ export function ResultsPage() {
 
     <div className="parking-workspace">
       <div className="parking-map-area">
-        <CarparkMap carparks={pins} selectedCarparkId={selected} onPinClick={onPinClick} userLocation={userLocation} userAccuracy={accuracy} searchLocation={browsing || searchArea ? null : searchCoords} searchRadius={radius} target={target} onViewportChange={setViewport} onMapMoved={onMapMoved} />
+        <CarparkMap carparks={pins} clusterCarparks={browsing} selectedCarparkId={selected} onPinClick={onPinClick} userLocation={userLocation} userAccuracy={accuracy} searchLocation={browsing || searchArea ? null : searchCoords} searchRadius={radius} target={target} onViewportChange={setViewport} onMapMoved={onMapMoved} />
         {!browsing && moved && !loading && <button className="parking-search-area" disabled={!viewport || !canSearchViewport(viewport)} onClick={() => explore()}><Search size={16} />{viewport && canSearchViewport(viewport) ? 'Search this area' : 'Zoom in to search this area'}</button>}
         {browsing && !loading && !error && <div className="parking-map-hint">Tap a group to zoom · Pins show available lots</div>}
         {loading && <div className="parking-map-status" role="status"><RefreshCw size={16} className="animate-spin" />Loading carparks…</div>}

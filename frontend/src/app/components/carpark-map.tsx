@@ -11,6 +11,7 @@ import 'leaflet.markercluster/dist/MarkerCluster.css'
 
 interface CarparkMapProps {
   carparks: Carpark[]
+  clusterCarparks: boolean
   selectedCarparkId: string | null
   onPinClick: (id: string) => void
   userLocation?: Coordinates | null
@@ -33,19 +34,19 @@ function pinIcon(cp: Carpark, selected = false) {
 }
 
 /** One batched Leaflet layer, rather than thousands of React markers/popups. */
-const ParkingPins = memo(function ParkingPins({ carparks, selectedCarparkId, onPinClick }: Pick<CarparkMapProps, 'carparks' | 'selectedCarparkId' | 'onPinClick'>) {
+const ParkingPins = memo(function ParkingPins({ carparks, clusterCarparks, selectedCarparkId, onPinClick }: Pick<CarparkMapProps, 'carparks' | 'clusterCarparks' | 'selectedCarparkId' | 'onPinClick'>) {
   const map = useMap()
   const markers = useRef(new Map<string, L.Marker>())
   const onClick = useRef(onPinClick)
   onClick.current = onPinClick
   useEffect(() => {
     const started = performance.now()
-    const cluster = L.markerClusterGroup({
+    // Only the whole-country explorer needs a clustering index.
+    const cluster = clusterCarparks ? L.markerClusterGroup({
       chunkedLoading: true, chunkInterval: 40, chunkDelay: 16,
       removeOutsideVisibleBounds: true, showCoverageOnHover: false,
       maxClusterRadius: 52, animate: false,
-      // Nearby searches start at zoom 15: show each carpark at its own location.
-      // A fixed cutoff avoids building clusters for the closer zoom levels.
+      // Keep individual locations visible when inspecting the explorer up close.
       disableClusteringAtZoom: 15,
       chunkProgress: (processed, total) => {
         if (import.meta.env.DEV && processed === total) console.debug(`Parking map: ${total} markers prepared in ${Math.round(performance.now() - started)}ms`)
@@ -55,7 +56,7 @@ const ParkingPins = memo(function ParkingPins({ carparks, selectedCarparkId, onP
         html: `<span>${group.getChildCount()}</span><small>carparks</small>`,
         iconSize: [56, 56],
       }),
-    })
+    }) : null
     const pins = carparks.filter(cp => Number.isFinite(cp.lat) && Number.isFinite(cp.lng)).map(cp => {
       const marker = L.marker([cp.lat, cp.lng], { icon: pinIcon(cp), title: cp.name, alt: `${cp.name}: ${cp.availabilityLevel === 'unknown' ? 'availability not tracked' : `${cp.availableLots} lots`}`, riseOnHover: true })
       marker.on('click', () => onClick.current(cp.id))
@@ -64,10 +65,12 @@ const ParkingPins = memo(function ParkingPins({ carparks, selectedCarparkId, onP
       return marker
     })
     // Batch insertion; avoid mounting a React subtree for every carpark.
-    map.addLayer(cluster)
-    cluster.addLayers(pins)
-    return () => { map.removeLayer(cluster); cluster.clearLayers(); markers.current.clear() }
-  }, [map, carparks])
+    const layer = cluster ?? L.layerGroup(pins)
+    map.addLayer(layer)
+    cluster?.addLayers(pins)
+    if (!cluster && import.meta.env.DEV) console.debug(`Parking map: ${pins.length} individual markers prepared in ${Math.round(performance.now() - started)}ms`)
+    return () => { map.removeLayer(layer); layer.clearLayers(); markers.current.clear() }
+  }, [map, carparks, clusterCarparks])
 
   useEffect(() => {
     if (!selectedCarparkId) return
@@ -78,7 +81,7 @@ const ParkingPins = memo(function ParkingPins({ carparks, selectedCarparkId, onP
     marker.setZIndexOffset(1000)
     map.panInside(marker.getLatLng(), { paddingTopLeft: L.point(35, 60), paddingBottomRight: L.point(65, window.innerWidth < 1024 ? Math.min(300, map.getSize().y * 0.49) : 35), animate: false })
     return () => { marker.setIcon(pinIcon(cp)); marker.setZIndexOffset(0) }
-  }, [carparks, selectedCarparkId, map])
+  }, [carparks, clusterCarparks, selectedCarparkId, map])
   return null
 })
 
@@ -113,7 +116,7 @@ export const CarparkMap = memo(function CarparkMap(props: CarparkMapProps) {
     <MapContainer center={[props.target.center.lat, props.target.center.lng]} zoom={props.target.zoom} className="h-full w-full" zoomControl={false} ref={mapRef}>
       <TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
       <MapEvents {...props} />
-      <ParkingPins carparks={props.carparks} selectedCarparkId={props.selectedCarparkId} onPinClick={props.onPinClick} />
+      <ParkingPins carparks={props.carparks} clusterCarparks={props.clusterCarparks} selectedCarparkId={props.selectedCarparkId} onPinClick={props.onPinClick} />
       {props.searchLocation && <>
         <Circle center={props.searchLocation} radius={props.searchRadius ?? 1000} pathOptions={{ color: '#2563eb', weight: 1, dashArray: '5 6', fillOpacity: 0.025 }} interactive={false} />
         <CircleMarker center={props.searchLocation} radius={7} pathOptions={{ color: 'white', weight: 3, fillColor: '#1a56db', fillOpacity: 1 }}><Tooltip>Search destination</Tooltip></CircleMarker>
@@ -135,7 +138,7 @@ export const CarparkMap = memo(function CarparkMap(props: CarparkMapProps) {
       <span><i style={{ background: '#F59E0B' }} /> Moderate / low</span>
       <span><i style={{ background: '#EF4444' }} /> Full</span>
       <span><i style={{ background: '#9CA3AF' }} /> P · Not tracked</span>
-      <small>Zoomed-out groups show carpark counts. Zoom in to see individual carparks.</small>
+      {props.clusterCarparks && <small>Zoomed-out groups show carpark counts. Zoom in to see individual carparks.</small>}
     </div>}
   </div>
 })
