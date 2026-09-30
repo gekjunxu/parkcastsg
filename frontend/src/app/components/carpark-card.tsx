@@ -34,7 +34,7 @@ export function CarparkCard({ carpark, isSelected, showRainIcon, onClick, onView
                     {/* Header */}
                     <div className="flex items-start gap-2 mb-2">
                         <h3 className="font-semibold text-gray-900 text-base flex-1 truncate">
-                            {carpark.name}
+                            <button type="button" className="text-left w-full" aria-label={`Show ${carpark.name} on map`}>{carpark.name}</button>
                         </h3>
                         {carpark.isRecommended && (
                             <span className="px-2 py-0.5 bg-[#10B981] text-white text-xs font-medium rounded-full whitespace-nowrap">
@@ -122,7 +122,7 @@ export function CarparkCard({ carpark, isSelected, showRainIcon, onClick, onView
                                     e.stopPropagation(); // prevent triggering the card's onClick
                                     if (onViewDetails) onViewDetails();
                                 }}
-                                className="w-full bg-[#1A56DB] text-white py-2 rounded-lg text-sm font-medium hover:bg-[#1444b8] transition-colors"
+                                className="w-full min-h-11 bg-[#1A56DB] text-white py-2 rounded-lg text-sm font-medium hover:bg-[#1444b8] transition-colors"
                             >
                                 View full details
                             </button>

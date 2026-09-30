@@ -1,286 +1,138 @@
-import { useEffect, useRef } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Circle, useMap } from 'react-leaflet';
-import L from 'leaflet';
-import { LocateFixed } from 'lucide-react';
-import { type Carpark, getAvailabilityColor } from '../data/carparks';
-import { type Coordinates } from '../../api/geocode';
-import { calculateLiveRates } from '../utils/pricingEngine';
-import 'leaflet/dist/leaflet.css';
+import { memo, useEffect, useRef, useState } from 'react'
+import { MapContainer, TileLayer, Marker, Circle, CircleMarker, Tooltip, useMap } from 'react-leaflet'
+import L from 'leaflet'
+import 'leaflet.markercluster'
+import { LocateFixed, Plus, Minus, Info } from 'lucide-react'
+import { type Carpark, getAvailabilityColor } from '../data/carparks'
+import type { Coordinates } from '../../api/geocode'
+import type { MapViewport } from '../utils/mapViewport'
+import 'leaflet/dist/leaflet.css'
+import 'leaflet.markercluster/dist/MarkerCluster.css'
 
 interface CarparkMapProps {
-    carparks: Carpark[];
-    selectedCarparkId: string | null;
-    onPinClick: (id: string) => void;
-    userLocation?: Coordinates | null;
-    userAccuracy?: number; // metres
-    recenterLocation?: Coordinates | null;
+  carparks: Carpark[]
+  selectedCarparkId: string | null
+  onPinClick: (id: string) => void
+  userLocation?: Coordinates | null
+  userAccuracy?: number
+  searchLocation?: Coordinates | null
+  searchRadius?: number
+  target: { center: Coordinates; zoom: number; revision: number }
+  onViewportChange: (viewport: MapViewport) => void
+  onMapMoved: () => void
 }
 
-// Custom marker icon component
-function createCustomIcon(color: string, isSelected: boolean) {
-    return L.divIcon({
-        className: 'custom-marker',
-        html: `
-      <div style="
-        width: ${isSelected ? '32px' : '24px'};
-        height: ${isSelected ? '32px' : '24px'};
-        background-color: ${color};
-        border: 3px solid white;
-        border-radius: 50%;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-        transition: all 0.2s ease;
-      "></div>
-    `,
-        iconSize: [isSelected ? 32 : 24, isSelected ? 32 : 24],
-        iconAnchor: [isSelected ? 16 : 12, isSelected ? 16 : 12],
-    });
+function pinIcon(cp: Carpark, selected = false) {
+  // Numeric or constant labels only: never interpolate API text into marker HTML.
+  const label = cp.availabilityLevel === 'unknown' ? 'P' : String(cp.availableLots)
+  return L.divIcon({
+    className: `parking-pin${selected ? ' is-selected' : ''}`,
+    html: `<span style="--pin-color:${getAvailabilityColor(cp.availabilityLevel)}">${label}</span>`,
+    iconSize: [44, 44], iconAnchor: [22, 22],
+  })
 }
 
-// Blue marker icon for user location
-function createUserLocationIcon() {
-    return L.divIcon({
-        className: 'user-location-marker',
-        html: `
-      <div style="
-        width: 20px;
-        height: 20px;
-        background-color: #1A56DB;
-        border: 3px solid white;
-        border-radius: 50%;
-        box-shadow: 0 2px 8px rgba(26,86,219,0.5);
-      "></div>
-    `,
-        iconSize: [20, 20],
-        iconAnchor: [10, 10],
-    });
+/** One batched Leaflet layer, rather than thousands of React markers/popups. */
+const ParkingPins = memo(function ParkingPins({ carparks, selectedCarparkId, onPinClick }: Pick<CarparkMapProps, 'carparks' | 'selectedCarparkId' | 'onPinClick'>) {
+  const map = useMap()
+  const markers = useRef(new Map<string, L.Marker>())
+  const onClick = useRef(onPinClick)
+  onClick.current = onPinClick
+  useEffect(() => {
+    const started = performance.now()
+    const cluster = L.markerClusterGroup({
+      chunkedLoading: true, chunkInterval: 40, chunkDelay: 16,
+      removeOutsideVisibleBounds: true, showCoverageOnHover: false,
+      maxClusterRadius: 52, animate: false,
+      chunkProgress: (processed, total) => {
+        if (import.meta.env.DEV && processed === total) console.debug(`Parking map: ${total} markers prepared in ${Math.round(performance.now() - started)}ms`)
+      },
+      iconCreateFunction: group => L.divIcon({
+        className: 'parking-cluster',
+        html: `<span>${group.getChildCount()}</span><small>carparks</small>`,
+        iconSize: [56, 56],
+      }),
+    })
+    const pins = carparks.filter(cp => Number.isFinite(cp.lat) && Number.isFinite(cp.lng)).map(cp => {
+      const marker = L.marker([cp.lat, cp.lng], { icon: pinIcon(cp), title: cp.name, alt: `${cp.name}: ${cp.availabilityLevel === 'unknown' ? 'availability not tracked' : `${cp.availableLots} lots`}`, riseOnHover: true })
+      marker.on('click', () => onClick.current(cp.id))
+      marker.on('add', () => marker.getElement()?.setAttribute('aria-label', `${cp.name}: ${cp.availabilityLevel === 'unknown' ? 'availability not tracked' : `${cp.availableLots} lots available`}`))
+      markers.current.set(cp.id, marker)
+      return marker
+    })
+    // Batch insertion; avoid mounting a React subtree for every carpark.
+    map.addLayer(cluster)
+    cluster.addLayers(pins)
+    return () => { map.removeLayer(cluster); cluster.clearLayers(); markers.current.clear() }
+  }, [map, carparks])
+
+  useEffect(() => {
+    if (!selectedCarparkId) return
+    const cp = carparks.find(cp => cp.id === selectedCarparkId)
+    const marker = markers.current.get(selectedCarparkId)
+    if (!cp || !marker) return
+    marker.setIcon(pinIcon(cp, true))
+    marker.setZIndexOffset(1000)
+    map.panInside(marker.getLatLng(), { paddingTopLeft: L.point(35, 60), paddingBottomRight: L.point(65, window.innerWidth < 1024 ? Math.min(300, map.getSize().y * 0.49) : 35), animate: false })
+    return () => { marker.setIcon(pinIcon(cp)); marker.setZIndexOffset(0) }
+  }, [carparks, selectedCarparkId, map])
+  return null
+})
+
+function MapEvents({ target, onViewportChange, onMapMoved }: Pick<CarparkMapProps, 'target' | 'onViewportChange' | 'onMapMoved'>) {
+  const map = useMap()
+  const callbacks = useRef({ onViewportChange, onMapMoved })
+  callbacks.current = { onViewportChange, onMapMoved }
+  useEffect(() => {
+    const report = () => {
+      const b = map.getBounds(), c = map.getCenter()
+      callbacks.current.onViewportChange({ north: b.getNorth(), south: b.getSouth(), east: b.getEast(), west: b.getWest(), center: { lat: c.lat, lng: c.lng }, zoom: map.getZoom() })
+    }
+    const moved = () => callbacks.current.onMapMoved()
+    map.on('moveend', report)
+    map.on('dragstart', moved)
+    map.on('zoomend', moved)
+    const observer = new ResizeObserver(() => map.invalidateSize({ pan: false }))
+    observer.observe(map.getContainer())
+    report()
+    return () => { map.off('moveend', report); map.off('dragstart', moved); map.off('zoomend', moved); observer.disconnect() }
+  }, [map])
+  useEffect(() => {
+    map.setView([target.center.lat, target.center.lng], target.zoom, { animate: false })
+  }, [map, target])
+  return null
 }
 
-// Component to handle map bounds and selected marker
-function MapController({
-    carparks,
-    selectedCarparkId,
-    userLocation,
-}: {
-    carparks: Carpark[];
-    selectedCarparkId: string | null;
-    userLocation?: Coordinates | null;
-}) {
-    const map = useMap();
-
-    useEffect(() => {
-        if (selectedCarparkId) {
-            const selected = carparks.find((cp) => cp.id === selectedCarparkId);
-            if (selected) {
-                map.setView([selected.lat, selected.lng], 16, { animate: true });
-                return;
-            }
-        }
-
-        if (carparks.length > 0) {
-            // Fit bounds to show all markers (include user location if present)
-            const points: [number, number][] = carparks.map((cp) => [cp.lat, cp.lng]);
-            if (userLocation) {
-                points.push([userLocation.lat, userLocation.lng]);
-            }
-            const bounds = L.latLngBounds(points);
-            map.fitBounds(bounds, { padding: [50, 50] });
-        } else if (userLocation) {
-            map.setView([userLocation.lat, userLocation.lng], 15, { animate: true });
-        }
-    }, [carparks, selectedCarparkId, userLocation, map]);
-
-    return null;
-}
-
-// Component to render individual markers and manage their popup state
-function CarparkMarker({ carpark, isSelected, onPinClick }: { carpark: Carpark; isSelected: boolean; onPinClick: (id: string) => void }) {
-    const markerRef = useRef<L.Marker>(null);
-
-    useEffect(() => {
-        if (isSelected && markerRef.current) {
-            // Slight delay ensures the map panning finishes or is in progress before opening the popup
-            setTimeout(() => {
-                markerRef.current?.openPopup();
-            }, 100);
-        }
-    }, [isSelected]);
-
-    const color = getAvailabilityColor(carpark.availabilityLevel);
-    const livePricing = calculateLiveRates(carpark);
-
-    return (
-        <Marker
-            position={[carpark.lat, carpark.lng]}
-            icon={createCustomIcon(color, isSelected)}
-            ref={markerRef}
-            eventHandlers={{
-                click: () => onPinClick(carpark.id),
-            }}
-        >
-            <Popup>
-                <div className="text-sm">
-                    <p className="font-semibold mb-1">{carpark.name}</p>
-                    {carpark.availabilityLevel === 'unknown'
-                        ? <p className="text-gray-400 italic mb-2">Availability not tracked</p>
-                        : <p className="text-gray-600 mb-2">{carpark.availableLots}{carpark.totalLots > 0 ? ` / ${carpark.totalLots}` : ''} lots available</p>
-                    }
-                    <div className="space-y-1">
-                        <p className="text-gray-700 font-medium flex items-center gap-2">
-                            <span>🚗</span> {livePricing.car}
-                        </p>
-                        <p className="text-gray-700 font-medium flex items-center gap-2">
-                            <span>🏍️</span> {livePricing.motorcycle}
-                        </p>
-                        <p className="text-gray-700 font-medium flex items-center gap-2">
-                            <span>🚚</span> {livePricing.heavy}
-                        </p>
-                    </div>
-                </div>
-            </Popup>
-        </Marker>
-    );
-}
-
-// Separate component for map content to avoid context issues
-function MapContent({
-    carparks,
-    selectedCarparkId,
-    onPinClick,
-    userLocation,
-    userAccuracy,
-    showAccuracyCircle,
-}: CarparkMapProps & { showAccuracyCircle: boolean }) {
-    return (
-        <>
-            <TileLayer
-                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            />
-
-            <MapController
-                carparks={carparks}
-                selectedCarparkId={selectedCarparkId}
-                userLocation={userLocation}
-            />
-
-            {/* User location accuracy circle */}
-            {(() => {
-                const accuracy: number | null =
-                    typeof userAccuracy === 'number' && Number.isFinite(userAccuracy) && userAccuracy > 0
-                        ? userAccuracy
-                        : null;
-                return userLocation && accuracy !== null && showAccuracyCircle ? (
-                    <Circle
-                        center={[userLocation.lat, userLocation.lng]}
-                        radius={accuracy}
-                        pathOptions={{
-                            color: '#1A56DB',
-                            fillColor: '#1A56DB',
-                            fillOpacity: 0.15,
-                            weight: 1.5,
-                        }}
-                    />
-                ) : null;
-            })()}
-
-            {/* User location marker */}
-            {userLocation && (
-                <Marker
-                    position={[userLocation.lat, userLocation.lng]}
-                    icon={createUserLocationIcon()}
-                >
-                    <Popup>
-                        <div className="text-sm">
-                            <p className="font-semibold mb-1">Your location</p>
-                            {userAccuracy && (
-                                <p className="text-gray-600">±{Math.round(userAccuracy)}m accuracy</p>
-                            )}
-                        </div>
-                    </Popup>
-                </Marker>
-            )}
-
-            {carparks.map((carpark) => {
-                const isSelected = selectedCarparkId === carpark.id;
-
-                return (
-                    <CarparkMarker
-                        key={carpark.id}
-                        carpark={carpark}
-                        isSelected={isSelected}
-                        onPinClick={onPinClick}
-                    />
-                );
-            })}
-        </>
-    );
-}
-
-export function CarparkMap(props: CarparkMapProps) {
-    // Default center (Marina Bay, Singapore)
-    const defaultCenter: [number, number] = [1.2816, 103.8544];
-    const mapRef = useRef<L.Map>(null);
-    const target = props.recenterLocation ?? props.userLocation;
-    const targetCenter: [number, number] = target
-        ? [target.lat, target.lng]
-        : defaultCenter;
-    const targetZoom = target ? 15 : 14;
-    const recenterLabel = props.userLocation
-        ? 'Recenter on my location'
-        : props.recenterLocation
-            ? 'Recenter on search location'
-            : 'Recenter Singapore map';
-
-    const handleRecenter = () => {
-        mapRef.current?.flyTo(targetCenter, targetZoom, {
-            duration: 0.8,
-        });
-    };
-
-    return (
-        <div className="h-full w-full relative">
-            <MapContainer
-                center={defaultCenter}
-                zoom={14}
-                className="h-full w-full"
-                zoomControl={true}
-                ref={mapRef}
-            >
-                <MapContent {...props} showAccuracyCircle={true} />
-            </MapContainer>
-
-            <button
-                type="button"
-                onClick={handleRecenter}
-                className="absolute bottom-4 right-4 z-[1000] flex h-11 w-11 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-700 shadow-lg transition-colors hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#1A56DB]/30"
-                aria-label={recenterLabel}
-                title={recenterLabel}
-            >
-                <LocateFixed className="h-5 w-5 text-[#1A56DB]" />
-            </button>
-
-            {/* Legend */}
-            <div className="absolute bottom-4 left-4 bg-white rounded-lg shadow-lg p-3 z-[1000] text-xs">
-                <p className="font-semibold mb-2 text-gray-900">Availability</p>
-                <div className="space-y-1.5">
-                    <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 rounded-full bg-[#10B981]" />
-                        <span className="text-gray-700">High</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 rounded-full bg-[#F59E0B]" />
-                        <span className="text-gray-700">Moderate/Low</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 rounded-full bg-[#EF4444]" />
-                        <span className="text-gray-700">Full</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 rounded-full bg-[#9CA3AF]" />
-                        <span className="text-gray-700">Not tracked</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
-}
+export const CarparkMap = memo(function CarparkMap(props: CarparkMapProps) {
+  const mapRef = useRef<L.Map>(null)
+  const [legend, setLegend] = useState(false)
+  return <div className="parking-map" aria-label="Carpark map">
+    <MapContainer center={[props.target.center.lat, props.target.center.lng]} zoom={props.target.zoom} className="h-full w-full" zoomControl={false} ref={mapRef}>
+      <TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+      <MapEvents {...props} />
+      <ParkingPins carparks={props.carparks} selectedCarparkId={props.selectedCarparkId} onPinClick={props.onPinClick} />
+      {props.searchLocation && <>
+        <Circle center={props.searchLocation} radius={props.searchRadius ?? 1000} pathOptions={{ color: '#2563eb', weight: 1, dashArray: '5 6', fillOpacity: 0.025 }} interactive={false} />
+        <CircleMarker center={props.searchLocation} radius={7} pathOptions={{ color: 'white', weight: 3, fillColor: '#1a56db', fillOpacity: 1 }}><Tooltip>Search destination</Tooltip></CircleMarker>
+      </>}
+      {props.userLocation && <>
+        {props.userAccuracy && Number.isFinite(props.userAccuracy) && props.userAccuracy > 0 && <Circle center={props.userLocation} radius={props.userAccuracy} pathOptions={{ color: '#2563eb', weight: 1, fillOpacity: 0.08 }} />}
+        <Marker position={props.userLocation} icon={L.divIcon({ className: 'parking-user-location', iconSize: [18, 18], iconAnchor: [9, 9] })} title="Your location" />
+      </>}
+    </MapContainer>
+    <div className="parking-map-controls">
+      <button onClick={() => mapRef.current?.zoomIn()} aria-label="Zoom in"><Plus size={20} /></button>
+      <button onClick={() => mapRef.current?.zoomOut()} aria-label="Zoom out"><Minus size={20} /></button>
+      <button onClick={() => mapRef.current?.setView(props.target.center, props.target.zoom)} aria-label="Recenter map"><LocateFixed size={20} /></button>
+      <button onClick={() => setLegend(!legend)} aria-label="Map legend" aria-expanded={legend}><Info size={20} /></button>
+    </div>
+    {legend && <div className="parking-legend">
+      <strong>Lots available</strong>
+      <span><i style={{ background: '#10B981' }} /> High</span>
+      <span><i style={{ background: '#F59E0B' }} /> Moderate / low</span>
+      <span><i style={{ background: '#EF4444' }} /> Full</span>
+      <span><i style={{ background: '#9CA3AF' }} /> P · Not tracked</span>
+      <small>Numbered groups show carpark counts. Tap to zoom in.</small>
+    </div>}
+  </div>
+})
