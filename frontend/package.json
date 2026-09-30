@@ -6,7 +6,7 @@
     "scripts": {
         "dev": "vite",
         "build": "vite build",
-        "test": "node --import tsx --test src/app/utils/pricingEngine.test.ts"
+        "test": "node --import tsx --test src/app/utils/pricingEngine.test.ts src/app/data/carparks.test.ts"
     },
     "dependencies": {
         "@emotion/react": "11.14.0",

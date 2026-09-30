@@ -114,6 +114,13 @@ export function sortCarparks(
     }
 }
 
+// Scheme eligibility is independent of today's date and the current parking rate.
+export function filterFreeSundayParking(carparks: Carpark[]): Carpark[] {
+    return carparks.filter((cp) =>
+        cp.source === 'hdb' && /\bSUN\s*&\s*PH\b/i.test(cp.freeParking ?? '')
+    );
+}
+
 export function filterShelteredCarparks(carparks: Carpark[]): Carpark[] {
     // Keep carparks with unknown shelter status in Rain Mode; only exclude
     // carparks explicitly marked as unsheltered.

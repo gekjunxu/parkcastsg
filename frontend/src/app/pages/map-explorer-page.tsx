@@ -31,6 +31,7 @@ import { getUserLocation, GeolocationError } from '../../api/geolocation'
 import {
   sortCarparks,
   filterShelteredCarparks,
+  filterFreeSundayParking,
   getAvailabilityColor,
   type Carpark,
 } from '../data/carparks'
@@ -212,8 +213,10 @@ const ExplorerPanelContent = memo(function ExplorerPanelContent({
   onSearchRadiusChange,
   sortBy,
   rainMode,
+  freeSundayParking,
   onSortChange,
   onRainModeToggle,
+  onFreeSundayParkingToggle,
   isLoading,
   loadError,
   displayedCarparks,
@@ -238,8 +241,10 @@ const ExplorerPanelContent = memo(function ExplorerPanelContent({
   onSearchRadiusChange: (radius: number) => void
   sortBy: 'recommended' | 'cheapest' | 'closest' | 'available'
   rainMode: boolean
+  freeSundayParking: boolean
   onSortChange: (value: 'recommended' | 'cheapest' | 'closest' | 'available') => void
   onRainModeToggle: () => void
+  onFreeSundayParkingToggle: () => void
   isLoading: boolean
   loadError: string | null
   displayedCarparks: Carpark[]
@@ -332,8 +337,10 @@ const ExplorerPanelContent = memo(function ExplorerPanelContent({
           <FilterChips
             selectedFilter={sortBy}
             rainMode={rainMode}
+            freeSundayParking={freeSundayParking}
             onFilterChange={onSortChange}
             onRainModeToggle={onRainModeToggle}
+            onFreeSundayParkingToggle={onFreeSundayParkingToggle}
           />
         ) : (
           <div className="flex items-center gap-2 text-gray-400 select-none" title="Search for a destination first to enable sorting">
@@ -380,7 +387,7 @@ const ExplorerPanelContent = memo(function ExplorerPanelContent({
             <p className="text-[13px] font-bold text-gray-700">No carparks found</p>
             <p className="text-[11.5px] text-gray-500 mt-1">
               {isSearchMode
-                ? 'Try expanding the radius or a different location'
+                ? 'Try expanding the radius, changing filters, or a different location'
                 : 'No carpark data available'}
             </p>
           </div>
@@ -457,6 +464,7 @@ export function MapExplorerPage() {
   const [pendingScrollId, setPendingScrollId] = useState<string | null>(null)
   const [sortBy, setSortBy] = useState<'recommended' | 'cheapest' | 'closest' | 'available'>('recommended')
   const [rainMode, setRainMode] = useState(false)
+  const [freeSundayParking, setFreeSundayParking] = useState(false)
   const [panelCollapsed, setPanelCollapsed] = useState(false)
   const [mobilePanelOpen, setMobilePanelOpen] = useState(false)
   const [lastFetchAt, setLastFetchAt] = useState<Date | null>(null)
@@ -508,16 +516,19 @@ export function MapExplorerPage() {
   // SEARCH MODE  → nearbyCarparks from /nearby (accurate server-side distances)
   // BROWSE MODE  → all carparks sorted A–Z (no reference point needed)
   const displayedCarparks = useMemo(() => {
-    if (isSearchMode) {
-      let list = [...nearbyCarparks]
-      if (rainMode) list = filterShelteredCarparks(list)
-      return sortCarparks(list, sortBy)
-    }
-    let list = [...allCarparks]
+    let list = [...(isSearchMode ? nearbyCarparks : allCarparks)]
     if (rainMode) list = filterShelteredCarparks(list)
+    if (isSearchMode && freeSundayParking) list = filterFreeSundayParking(list)
+    if (isSearchMode) return sortCarparks(list, sortBy)
     // Default: alphabetical — no misleading distance from SG center
     return list.sort((a, b) => a.name.localeCompare(b.name))
-  }, [allCarparks, nearbyCarparks, isSearchMode, rainMode, sortBy])
+  }, [allCarparks, nearbyCarparks, isSearchMode, rainMode, freeSundayParking, sortBy])
+
+  // Keep the full-map browsing behavior while hiding ineligible pins when filtered.
+  const mapCarparks = useMemo(
+    () => isSearchMode && freeSundayParking ? filterFreeSundayParking(allCarparks) : allCarparks,
+    [allCarparks, isSearchMode, freeSundayParking],
+  )
 
   // ── Scroll to pending card after search is cleared ─────────────────────────
   useEffect(() => {
@@ -733,8 +744,10 @@ export function MapExplorerPage() {
             onSearchRadiusChange={setSearchRadius}
             sortBy={sortBy}
             rainMode={rainMode}
+            freeSundayParking={freeSundayParking}
             onSortChange={setSortBy}
             onRainModeToggle={() => setRainMode((r) => !r)}
+            onFreeSundayParkingToggle={() => setFreeSundayParking((value) => !value)}
             isLoading={isLoading}
             loadError={loadError}
             displayedCarparks={displayedCarparks}
@@ -814,7 +827,7 @@ export function MapExplorerPage() {
               </Marker>
             )}
 
-            {/* All carpark pins (always rendered — map is fully populated) */}
+            {/* All carpark pins, restricted to the free-parking scheme when selected */}
             {!isLoading && (
               <MarkerClusterGroup
                 maxClusterRadius={50}
@@ -822,7 +835,7 @@ export function MapExplorerPage() {
                 spiderfyOnMaxZoom
                 disableClusteringAtZoom={17}
               >
-                {allCarparks.map((cp) => (
+                {mapCarparks.map((cp) => (
                   <CarparkPin
                     key={cp.id}
                     carpark={cp}
@@ -924,8 +937,10 @@ export function MapExplorerPage() {
                 onSearchRadiusChange={setSearchRadius}
                 sortBy={sortBy}
                 rainMode={rainMode}
+                freeSundayParking={freeSundayParking}
                 onSortChange={setSortBy}
                 onRainModeToggle={() => setRainMode((r) => !r)}
+                onFreeSundayParkingToggle={() => setFreeSundayParking((value) => !value)}
                 isLoading={isLoading}
                 loadError={loadError}
                 displayedCarparks={displayedCarparks}

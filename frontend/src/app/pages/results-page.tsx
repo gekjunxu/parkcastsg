@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { useNavigate, useSearchParams } from 'react-router'
 import { ArrowLeft, Filter, X } from 'lucide-react'
 import { CarparkCard } from '../components/carpark-card'
@@ -9,6 +9,7 @@ import { LoadingSkeleton } from '../components/loading-skeleton'
 import {
   sortCarparks,
   filterShelteredCarparks,
+  filterFreeSundayParking,
   type Carpark,
 } from '../data/carparks'
 import { geocodeQuery } from '../../api/geocode'
@@ -21,12 +22,12 @@ export function ResultsPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [allCarparks, setAllCarparks] = useState<Carpark[]>([])
-  const [carparks, setCarparks] = useState<Carpark[]>([])
   const [selectedCarpark, setSelectedCarpark] = useState<string | null>(null)
   const [sortBy, setSortBy] = useState<
     'recommended' | 'cheapest' | 'closest' | 'available'
   >('recommended')
   const [rainMode, setRainMode] = useState(false)
+  const [freeSundayParking, setFreeSundayParking] = useState(false)
   const [showWeatherBanner, setShowWeatherBanner] = useState(false)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   const [searchCoords, setSearchCoords] = useState<{
@@ -91,17 +92,15 @@ export function ResultsPage() {
       if (cancelRef.current) return
 
       // 3. Transform backend shape → frontend Carpark type
-      let results: Carpark[] = raw.map(transformCarpark)
+      const results = raw.map(transformCarpark)
 
       // Fetch weather
-      let isRainingLocally = false
       try {
         const weatherData = await getWeatherForecast(coords.lat, coords.lng)
         if (!cancelRef.current) {
           setWeather(weatherData)
           setShowWeatherBanner(true)
           if (weatherData.isRaining) {
-            isRainingLocally = true
             setRainMode(true)
             setIsWeatherAutoActivated(true)
           } else {
@@ -117,13 +116,6 @@ export function ResultsPage() {
       // Keep a copy of the full results
       setAllCarparks(results)
 
-      // 4. Apply local filters
-      if (rainMode || isRainingLocally) {
-        results = filterShelteredCarparks(results)
-      }
-      results = sortCarparks(results, sortBy)
-
-      setCarparks(results)
       setLastUpdated(new Date())
     } catch (err) {
       if (!cancelRef.current) {
@@ -149,13 +141,16 @@ export function ResultsPage() {
   }, [destination, latParam, lngParam, radius])
 
   // Re-apply filters/sort without re-fetching from the network
-  useEffect(() => {
-    let results = [...allCarparks]
+  const carparks = useMemo(() => {
+    let results = allCarparks
     if (rainMode) {
       results = filterShelteredCarparks(results)
     }
-    setCarparks(sortCarparks(results, sortBy))
-  }, [allCarparks, sortBy, rainMode])
+    if (freeSundayParking) {
+      results = filterFreeSundayParking(results)
+    }
+    return sortCarparks(results, sortBy)
+  }, [allCarparks, sortBy, rainMode, freeSundayParking])
 
   const handleCarparkClick = (id: string) => {
     setSelectedCarpark(id)
@@ -255,8 +250,10 @@ export function ResultsPage() {
         <FilterChips
           selectedFilter={sortBy}
           rainMode={rainMode}
+          freeSundayParking={freeSundayParking}
           onFilterChange={setSortBy}
-          onRainModeToggle={() => setRainMode(!rainMode)}
+          onRainModeToggle={() => setRainMode(v => !v)}
+          onFreeSundayParkingToggle={() => setFreeSundayParking(v => !v)}
         />
       </div>
 
@@ -292,7 +289,9 @@ export function ResultsPage() {
                   No carparks found
                 </h3>
                 <p className='text-gray-500 text-sm mb-1'>
-                  This area may have limited HDB carparks.
+                  {rainMode || freeSundayParking
+                    ? 'No carparks match your filters in this area.'
+                    : 'This area may have limited HDB carparks.'}
                 </p>
                 <p className='text-gray-500 text-sm mb-5'>
                   Try a wider search radius below.
@@ -304,6 +303,14 @@ export function ResultsPage() {
                       className='px-5 py-2.5 bg-[#1A56DB] text-white text-sm font-medium rounded-lg hover:bg-[#1444b8] transition-colors'
                     >
                       Expand to 2km
+                    </button>
+                  )}
+                  {freeSundayParking && (
+                    <button
+                      onClick={() => setFreeSundayParking(false)}
+                      className='text-[#1A56DB] text-sm font-medium hover:underline'
+                    >
+                      Remove free Sunday/PH filter
                     </button>
                   )}
                   {rainMode && (
