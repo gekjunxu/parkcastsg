@@ -57,6 +57,7 @@ export function FilterChips({
             <button
                 type="button"
                 aria-pressed={freeWeekendMode}
+                title="HDB carparks offering free parking on Sundays and public holidays during their stated hours"
                 onClick={onFreeWeekendModeToggle}
                 className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all flex items-center gap-1.5 ${freeWeekendMode
                     ? 'bg-emerald-600 text-white shadow-md'

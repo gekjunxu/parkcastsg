@@ -22,9 +22,10 @@ export class ShelteredCarparkFilter extends CarparkFilter {
   }
 }
 
-/** Match advertised Sunday and public holiday free parking, regardless of short-term status. */
+/** Match HDB Sunday and public holiday free parking, regardless of short-term status. */
 export class FreeSundayPublicHolidayCarparkFilter extends CarparkFilter {
   matches(carpark: Carpark): boolean {
-    return /SUN\s*&\s*PH/i.test(carpark.freeParking ?? '')
+    return carpark.source === 'hdb'
+      && /\bSUN\s*&\s*PH\b/i.test(carpark.freeParking ?? '')
   }
 }
