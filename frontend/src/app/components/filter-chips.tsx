@@ -1,17 +1,21 @@
-import { CloudRain } from 'lucide-react';
+import { CalendarCheck2, CloudRain } from 'lucide-react';
 
 interface FilterChipsProps {
     selectedFilter: 'recommended' | 'cheapest' | 'closest' | 'available';
     rainMode: boolean;
+    freeWeekendMode: boolean;
     onFilterChange: (filter: 'recommended' | 'cheapest' | 'closest' | 'available') => void;
     onRainModeToggle: () => void;
+    onFreeWeekendModeToggle: () => void;
 }
 
 export function FilterChips({
     selectedFilter,
     rainMode,
+    freeWeekendMode,
     onFilterChange,
     onRainModeToggle,
+    onFreeWeekendModeToggle,
 }: FilterChipsProps) {
     const filters: Array<{
         id: 'recommended' | 'cheapest' | 'closest' | 'available';
@@ -49,6 +53,18 @@ export function FilterChips({
             >
                 <CloudRain className="w-4 h-4" />
                 Rain Mode
+            </button>
+            <button
+                type="button"
+                aria-pressed={freeWeekendMode}
+                onClick={onFreeWeekendModeToggle}
+                className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all flex items-center gap-1.5 ${freeWeekendMode
+                    ? 'bg-emerald-600 text-white shadow-md'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+            >
+                <CalendarCheck2 className="w-4 h-4" />
+                Free Sun &amp; PH
             </button>
         </div>
     );
