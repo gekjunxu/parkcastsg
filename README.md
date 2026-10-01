@@ -4,6 +4,12 @@ ParkCastSG helps drivers find nearby Singapore carparks and compare the price
 they are likely to pay now. It combines live public availability with a local
 rate catalogue and runs without a database or machine-learning service.
 
+## Try ParkCastSG
+
+The current ParkCastSG staging deployment is available at
+[prodesk.tail960ba6.ts.net/parkcastsit](https://prodesk.tail960ba6.ts.net/parkcastsit/map).
+Open the map to search for carparks and try the Sunday free-parking filter.
+
 ## What it does
 
 - Searches Singapore destinations and postal codes with OneMap.
