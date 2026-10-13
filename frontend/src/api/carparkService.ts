@@ -118,6 +118,7 @@ function distanceToWalkingMinutes(distanceMetres: number): number {
 export function transformCarpark(raw: NearbyCarpark): Carpark {
     const isLta = raw.source === 'lta';
     const isSupplemental = raw.source === 'supplemental';
+    const availabilityLevel = crowdToAvailability(raw.crowd_level);
     const cp: Carpark = {
         id: raw.id,
         name: raw.name,
@@ -127,7 +128,7 @@ export function transformCarpark(raw: NearbyCarpark): Carpark {
         availableLots: raw.available_lots,
         totalLots: raw.total_lots,
         lotTypes: raw.lot_types ? raw.lot_types.map((lot) => ({ lotType: lot.lot_type, availableLots: lot.available_lots, totalLots: lot.total_lots })) : [],
-        availabilityLevel: crowdToAvailability(raw.crowd_level),
+        availabilityLevel,
         walkingMinutes: distanceToWalkingMinutes(raw.distance),
 
         // Unknown rates stay at Infinity so "Cheapest" never promotes a
@@ -149,7 +150,7 @@ export function transformCarpark(raw: NearbyCarpark): Carpark {
         isPeak: raw.is_peak,
         availabilityUpdatedAt: raw.availability_timestamp ?? undefined,
         // LTA/supplemental carparks are not marked recommended (unknown availability)
-        isRecommended: !isLta && !isSupplemental && raw.available_lots > 10 && raw.is_sheltered,
+        isRecommended: !isLta && !isSupplemental && availabilityLevel === 'high' && raw.is_sheltered === true,
     };
 
     // Assign accurate live numeric rate for all carparks so they sort correctly

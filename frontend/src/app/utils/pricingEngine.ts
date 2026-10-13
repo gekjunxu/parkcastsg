@@ -1,4 +1,4 @@
-import { isSundayOrPublicHoliday } from './holidays';
+import { isSundayOrPublicHoliday, SINGAPORE_PUBLIC_HOLIDAYS_YYYY_MM_DD } from './holidays';
 import type { Carpark } from '../data/carparks';
 
 interface LivePrices {
@@ -15,6 +15,13 @@ interface PeakWindow {
 type PeakConfig = Record<string, PeakWindow[]>;
 
 export type ParsedRateBasis = 'hour' | 'entry' | 'free' | 'unknown';
+
+const DOWNTOWN_EAST_PRICING_NOTE =
+  "Note: School holidays use the Fri–Sun tariff, but the app doesn't detect school-holiday dates automatically. The 9pm–5am free-parking offer applies only to Begonia Open Air Carpark.";
+
+function isDowntownEast(carpark: Carpark): boolean {
+  return carpark.name.trim().toLowerCase() === 'downtown east';
+}
 
 export interface ParsedTextRate {
   amount: number;
@@ -48,14 +55,15 @@ function isPeakActive(id: string, day: number, hour: number): boolean {
 }
 
 function parseTimeString(timeStr: string): { hour: number, min: number } | null {
-  const match = timeStr.match(/^(\d+)(?:\.(\d+))?(AM|PM)$/i);
+  const normalizedTime = timeStr.trim().replace(/\s+/g, '');
+  const match = normalizedTime.match(/^(\d+)(?:\.(\d+))?(AM|PM|MN|MIDNIGHT)$/i);
   if (!match) return null;
   let hour = parseInt(match[1], 10);
   const min = match[2] ? parseInt(match[2], 10) : 0;
   const ampm = match[3].toUpperCase();
 
   if (ampm === 'PM' && hour < 12) hour += 12;
-  if (ampm === 'AM' && hour === 12) hour = 0;
+  if ((ampm === 'AM' || ampm === 'MN' || ampm === 'MIDNIGHT') && hour === 12) hour = 0;
 
   return { hour, min };
 }
@@ -127,72 +135,73 @@ function parseHourBoundary(timeStr: string): number | null {
   return parsed.hour;
 }
 
-/**
- * Attempts to parse arbitrary text-based SGD pricing strings 
- * (e.g. from CarparkRates.csv) into numerical hourly equivalents.
- * Segment checking ensures we only process the rate block that belongs to the current hour.
- */
-export function parseTextRate(rate: string | undefined, currentHour: number): ParsedTextRate | null {
-  if (!rate || rate === '-' || rate.toLowerCase() === 'no') return null;
-  
-  let lower = rate.toLowerCase();
+const DAY_NAMES = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
+const DAY_NAME_PATTERN = '(?:sun(?:day)?|mon(?:day)?|tue(?:sday)?|wed(?:nesday)?|thu(?:rsday)?|fri(?:day)?|sat(?:urday)?)';
 
-  // Try to segment by newline or semicolon if there are multiple parts
-  const rawSegments = lower.split(/\n|;/).map(s => s.trim()).filter(s => s);
-  const activeSegments = [];
+function dayIndex(dayName: string): number {
+  const shortName = dayName.slice(0, 3).toLowerCase();
+  return DAY_NAMES.indexOf(shortName as typeof DAY_NAMES[number]);
+}
 
-  // Tracks whether the most recent explicitly time-windowed segment was active.
-  // Segments without a time qualifier inherit this value so that sub-rate
-  // fragments (e.g. "$0.37 for sub. 10mins") are only included when their
-  // parent time block is active.
-  let prevActive = true;
+function segmentAppliesToDay(segment: string, currentDay: number | undefined): boolean {
+  if (currentDay === undefined || currentDay < 0 || currentDay > 6) return true;
 
-  for (const segment of rawSegments) {
-     const timeWindowMatch = segment.match(/([0-9]+(?:\.[0-9]+)?(?:am|pm))\s*-\s*([0-9]+(?:\.[0-9]+)?(?:am|pm))/i) || 
-                             segment.match(/([0-9]{4})\s*-\s*([0-9]{4})/i);
-     const aftMatch = segment.match(/aft(?:er)?\s*([0-9]+(?:\.[0-9]+)?(?:am|pm))/i);
-     
-     const hasExplicitWindow = !!(timeWindowMatch || aftMatch);
-     let inWindow: boolean;
+  const dayMatches = [...segment.matchAll(new RegExp(`\\b${DAY_NAME_PATTERN}\\b`, 'gi'))];
+  if (dayMatches.length === 0) return true;
 
-     if (timeWindowMatch) {
-        const startMatch = timeWindowMatch[1];
-        const endMatch = timeWindowMatch[2];
-        const startH = parseHourBoundary(startMatch) ?? parseInt(startMatch.slice(0, 2), 10);
-        const endH = parseHourBoundary(endMatch) ?? parseInt(endMatch.slice(0, 2), 10);
-        
-        if (!isNaN(startH) && !isNaN(endH)) {
-            if (startH <= endH) {
-               inWindow = currentHour >= startH && currentHour < endH;
-            } else { // wraps past midnight e.g. 5pm-7am
-               inWindow = currentHour >= startH || currentHour < endH;
-            }
-        } else {
-            inWindow = prevActive;
-        }
-     } else if (aftMatch) {
-         const startH = parseHourBoundary(aftMatch[1]);
-         inWindow = startH !== null ? currentHour >= startH : prevActive;
-     } else {
-         // No explicit time window — inherit from the previous time-windowed segment
-         inWindow = prevActive;
-     }
+  const clock = '(?:[0-9]+(?:\\.[0-9]+)?\\s*(?:am|pm|mn|midnight)|[0-9]{4})';
+  const conditionPositions = [
+    segment.search(new RegExp(`(${clock})\\s*(?:-|to)\\s*(${clock})`, 'i')),
+    segment.search(/aft(?:er)?\s*[0-9]+(?:\.[0-9]+)?(?:am|pm)/i),
+    segment.indexOf('$'),
+  ].filter(position => position >= 0);
+  const firstConditionPosition = conditionPositions.length > 0
+    ? Math.min(...conditionPositions)
+    : Number.POSITIVE_INFINITY;
+  if ((dayMatches[0].index ?? Number.POSITIVE_INFINITY) >= firstConditionPosition) return true;
 
-     if (hasExplicitWindow) {
-         prevActive = inWindow;
-     }
-     
-     if (inWindow) {
-         activeSegments.push(segment);
-     }
-  }
-  
-  if (activeSegments.length > 0) {
-     lower = activeSegments.join(" ");
+  const namedDays = dayMatches.map(match => dayIndex(match[0]));
+
+  const applicableDays = new Set(namedDays.filter(day => day >= 0));
+  const range = segment.match(new RegExp(`\\b(${DAY_NAME_PATTERN})\\s*(?:[-–]|\\bto\\b)\\s*(${DAY_NAME_PATTERN})\\b`, 'i'));
+  if (range) {
+    const start = dayIndex(range[1]);
+    const end = dayIndex(range[2]);
+    if (start >= 0 && end >= 0) {
+      let day = start;
+      for (let count = 0; count < 7; count += 1) {
+        applicableDays.add(day);
+        if (day === end) break;
+        day = (day + 1) % 7;
+      }
+    }
   }
 
-  // Free checks
-  if (lower.includes('free') && (lower.includes('daily') || !/\d/.test(lower))) {
+  return applicableDays.has(currentDay);
+}
+
+function getSegmentTimeWindow(segment: string): { startHour: number; endHour: number } | null {
+  const clock = '(?:[0-9]+(?:\\.[0-9]+)?\\s*(?:am|pm|mn|midnight)|[0-9]{4})';
+  const timeWindowMatch = segment.match(new RegExp(`(${clock})\\s*(?:-|to)\\s*(${clock})`, 'i'));
+  if (!timeWindowMatch) return null;
+
+  const parseBoundary = (value: string) => parseHourBoundary(value) ?? parseInt(value.slice(0, 2), 10);
+  const startHour = parseBoundary(timeWindowMatch[1]);
+  const endHour = parseBoundary(timeWindowMatch[2]);
+  return Number.isNaN(startHour) || Number.isNaN(endHour) ? null : { startHour, endHour };
+}
+
+function isHourInWindow(hour: number, startHour: number, endHour: number): boolean {
+  if (startHour === endHour) return true;
+  return startHour < endHour
+    ? hour >= startHour && hour < endHour
+    : hour >= startHour || hour < endHour;
+}
+
+function parseRateSegment(segment: string): ParsedTextRate | null {
+  const lower = segment.toLowerCase();
+
+  if (lower.includes('free') && (lower.includes('daily') || /free\s+(?:lunch|parking)|(?:lunch|parking)[^;]*\bfree/.test(lower))) {
     return { amount: 0, basis: 'free' };
   }
 
@@ -203,7 +212,7 @@ export function parseTextRate(rate: string | undefined, currentHour: number): Pa
   if (match) return { amount: parseFloat(match[1]), basis: 'hour' };
 
   // $X per hr
-  match = lower.match(/\$([0-9.]+)\s(?:per|\/)\s?(?:hr|hour)/);
+  match = lower.match(/\$([0-9.]+)\s*(?:per\s*|\/\s*)(?:hr|hour)\b/);
   if (match) return { amount: parseFloat(match[1]), basis: 'hour' };
 
   // $X per ½ hr -> X * 2
@@ -223,7 +232,7 @@ export function parseTextRate(rate: string | undefined, currentHour: number): Pa
   if (match) return { amount: parseFloat(match[1]), basis: 'hour' };
 
   // $X per entry
-  match = lower.match(/\$([0-9.]+).*?per entry/);
+  match = lower.match(/\$([0-9.]+)\s*(?:per\s+|\/\s*)entry/);
   if (match) return { amount: parseFloat(match[1]), basis: 'entry' };
 
   // $X /min or $X per min — convert to hourly
@@ -235,6 +244,67 @@ export function parseTextRate(rate: string | undefined, currentHour: number): Pa
   if (match) return { amount: parseFloat(match[1]), basis: 'unknown' };
 
   return null;
+}
+
+/**
+ * Parses the active rate clause from a text tariff into a comparable price.
+ * Amounts and billing units are read from the same clause; optional day names
+ * let callers select tariffs that differ across weekday groups.
+ */
+export function parseTextRate(
+  rate: string | undefined,
+  currentHour: number,
+  currentDay?: number,
+): ParsedTextRate | null {
+  if (!rate || rate.trim() === '-' || rate.toLowerCase() === 'no') return null;
+
+  const rawSegments = rate.toLowerCase().split(/\n|;/).map(s => s.trim()).filter(Boolean);
+  const daySegments = rawSegments.filter(segment => segmentAppliesToDay(segment, currentDay));
+  const explicitStarts = daySegments
+    .map(segment => getSegmentTimeWindow(segment)?.startHour)
+    .filter((hour): hour is number => hour !== undefined);
+
+  let previousWindowActive = true;
+  const activeSegments: string[] = [];
+
+  for (const segment of rawSegments) {
+    if (!segmentAppliesToDay(segment, currentDay)) continue;
+
+    const window = getSegmentTimeWindow(segment);
+    const aftMatch = segment.match(/aft(?:er)?\s*([0-9]+(?:\.[0-9]+)?(?:am|pm))/i);
+    let inWindow = previousWindowActive;
+
+    if (window) {
+      inWindow = isHourInWindow(currentHour, window.startHour, window.endHour);
+    } else if (aftMatch) {
+      const startHour = parseHourBoundary(aftMatch[1]);
+      if (startHour !== null && explicitStarts.length > 0) {
+        const followingBoundary = explicitStarts.filter(hour => hour > startHour).sort((a, b) => a - b)[0]
+          ?? explicitStarts.filter(hour => hour < startHour).sort((a, b) => a - b)[0];
+        inWindow = followingBoundary === undefined
+          ? currentHour >= startHour
+          : isHourInWindow(currentHour, startHour, followingBoundary);
+      } else if (startHour !== null) {
+        inWindow = currentHour >= startHour;
+      }
+    }
+
+    if (window || aftMatch) previousWindowActive = inWindow;
+    if (inWindow) activeSegments.push(segment);
+  }
+
+  if (activeSegments.length === 0) return null;
+
+  let firstKnown: ParsedTextRate | null = null;
+  let firstUnknown: ParsedTextRate | null = null;
+  for (const segment of activeSegments) {
+    const parsed = parseRateSegment(segment);
+    if (parsed?.basis === 'free') return parsed;
+    if (parsed && parsed.basis !== 'unknown' && firstKnown === null) firstKnown = parsed;
+    if (parsed && firstUnknown === null) firstUnknown = parsed;
+  }
+
+  return firstKnown ?? firstUnknown;
 }
 
 /** Backwards-compatible numeric helper used by focused parser tests. */
@@ -255,22 +325,59 @@ function firstValidRate(...fields: (string | undefined)[]): string | undefined {
   return fields.find(hasRate);
 }
 
+function isPublicHolidayEve(now: Date): boolean {
+  const tomorrow = new Date(now);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const dateKey = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, '0')}-${String(tomorrow.getDate()).padStart(2, '0')}`;
+  return SINGAPORE_PUBLIC_HOLIDAYS_YYYY_MM_DD.has(dateKey);
+}
+
 /**
- * Determines which text rate string perfectly applies for the current hour.
+ * Selects the schedule for the supplied day, resolving common rate aliases.
  * @param now - SGT-adjusted Date, must match the `day` value passed in.
  */
-function getTargetTextRate(carpark: Carpark, day: number, now: Date): string | undefined {
+function getWeekdayRateSchedule(carpark: Carpark): string | undefined {
+  const rates = [carpark.weekdaysRate1, carpark.weekdaysRate2].filter(hasRate);
+  return rates.length > 0 ? rates.join('\n') : undefined;
+}
+
+function resolveRateAlias(rate: string | undefined, carpark: Carpark): string | undefined {
+  if (!hasRate(rate)) return undefined;
+  if (/^same as (?:wkdays?|weekdays?)$/i.test(rate.trim())) {
+    return getWeekdayRateSchedule(carpark);
+  }
+  if (/^same as (?:sat|saturday)$/i.test(rate.trim()) && hasRate(carpark.saturdayRate)) {
+    return /^same as (?:sat|saturday)$/i.test(carpark.saturdayRate.trim())
+      ? undefined
+      : resolveRateAlias(carpark.saturdayRate, carpark);
+  }
+  return rate;
+}
+
+export function getTargetTextRate(carpark: Carpark, day: number, now: Date): string | undefined {
+  // Downtown East publishes its public-holiday-eve tariff with the Fri-Sun rates.
+  if (isDowntownEast(carpark) && isPublicHolidayEve(now)) {
+    return resolveRateAlias(
+      firstValidRate(carpark.saturdayRate, carpark.sundayPhRate),
+      carpark,
+    );
+  }
   if (isSundayOrPublicHoliday(now)) {
-    return firstValidRate(carpark.sundayPhRate, carpark.weekdaysRate1, carpark.weekdaysRate2);
+    return resolveRateAlias(
+      firstValidRate(carpark.sundayPhRate, carpark.weekdaysRate1, carpark.weekdaysRate2),
+      carpark,
+    );
   }
   if (day === 6) { // Saturday
-    return firstValidRate(carpark.saturdayRate, carpark.weekdaysRate1, carpark.weekdaysRate2);
+    return resolveRateAlias(
+      firstValidRate(carpark.saturdayRate, carpark.weekdaysRate1, carpark.weekdaysRate2),
+      carpark,
+    );
   }
   // Mon-Fri: combine both weekday rate fields so that the time-window matching
   // in parseTextRate can select the correct block (e.g. after-5pm
   // rates stored in weekdaysRate2 are invisible when only weekdaysRate1 is used).
-  const parts = [carpark.weekdaysRate1, carpark.weekdaysRate2].filter(hasRate);
-  return parts.length > 0 ? parts.join('\n') : undefined;
+  return getWeekdayRateSchedule(carpark);
 }
 
 /**
@@ -303,7 +410,7 @@ export function calculateLiveRates(carpark: Carpark): LivePrices {
   // --- NON-HDB CUSTOM PARSABLE RATES ---
   if (carpark.source === 'lta' || carpark.source === 'supplemental') {
     const rateText = getTargetTextRate(carpark, day, now);
-    const parsed = parseTextRate(rateText, hour);
+    const parsed = parseTextRate(rateText, hour, day);
 
     if (parsed !== null) {
         if (parsed.basis === 'free') {
@@ -392,6 +499,7 @@ export function getNumericLiveCarRate(carpark: Carpark): number {
     const parsed = parseTextRate(
       getTargetTextRate(carpark, now.getDay(), now),
       now.getHours(),
+      now.getDay(),
     );
     if (!parsed || parsed.basis === 'unknown') return Number.POSITIVE_INFINITY;
     if (parsed.basis === 'entry') return Number.POSITIVE_INFINITY;
@@ -420,7 +528,11 @@ export function generatePricingBreakdown(carpark: Carpark) {
 
   if (carpark.shortTermParking === 'NO') {
     const unav = "Short-term parking completely unavailable";
-    return { car: [unav], motorcycle: [unav], heavy: [unav] };
+    return {
+      car: [unav, ...(isDowntownEast(carpark) ? [DOWNTOWN_EAST_PRICING_NOTE] : [])],
+      motorcycle: [unav],
+      heavy: [unav],
+    };
   }
 
   const shortTermMsg = carpark.shortTermParking && carpark.shortTermParking !== 'WHOLE DAY'
@@ -434,8 +546,9 @@ export function generatePricingBreakdown(carpark: Carpark) {
         shortTermMsg,
         carpark.weekdaysRate1 ? `Daily: ${carpark.weekdaysRate1}` : null,
         carpark.weekdaysRate2 ? `Daily (Alt): ${carpark.weekdaysRate2}` : null,
-        carpark.saturdayRate ? `Saturday: ${carpark.saturdayRate}` : null,
-        carpark.sundayPhRate ? `Sunday & PH: ${carpark.sundayPhRate}` : null,
+        carpark.saturdayRate ? `Saturday: ${resolveRateAlias(carpark.saturdayRate, carpark)}` : null,
+        carpark.sundayPhRate ? `Sunday & PH: ${resolveRateAlias(carpark.sundayPhRate, carpark)}` : null,
+        isDowntownEast(carpark) ? DOWNTOWN_EAST_PRICING_NOTE : null,
       ].filter((line): line is string => line !== null),
       motorcycle: ["Rate varies. Please see operator's signage."],
       heavy: ["Rate varies. Please see operator's signage."]

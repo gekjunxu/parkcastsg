@@ -415,36 +415,37 @@ async def _get_lta_carpark(
             detail=f"LTA carpark '{carpark_id}' not found (not in static lookup — run fetch_lta_carparks.py)",
         )
 
+    data: dict | None = None
+    lta_fetch_timestamp: str | None = None
     if not LTA_API_KEY:
-        raise HTTPException(
-            status_code=503,
-            detail="LTA service unavailable: LTA_API_KEY not configured",
-        )
-
-    try:
-        lta_fetch_timestamp = datetime.now(timezone.utc).isoformat()
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.get(
-                LTA_AVAILABILITY_URL,
-                headers={"AccountKey": LTA_API_KEY, "accept": "application/json"},
-            )
-            resp.raise_for_status()
-    except httpx.HTTPError as exc:
-        raise HTTPException(status_code=502, detail=f"LTA API error: {exc}") from exc
-
-    try:
-        data = resp.json()
-    except ValueError as exc:
-        raise HTTPException(status_code=502, detail=f"LTA API returned invalid JSON: {exc}") from exc
-
-    if not isinstance(data, dict) or not isinstance(data.get("value"), list):
-        raise HTTPException(status_code=502, detail="Unexpected LTA API response shape")
+        logging.warning("LTA_API_KEY not configured; returning static LTA carpark details")
+    else:
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.get(
+                    LTA_AVAILABILITY_URL,
+                    headers={"AccountKey": LTA_API_KEY, "accept": "application/json"},
+                )
+                resp.raise_for_status()
+        except httpx.HTTPError as exc:
+            logging.warning("Failed to fetch LTA carpark detail (%s); using static details", exc)
+        else:
+            try:
+                payload = resp.json()
+            except ValueError:
+                logging.warning("LTA carpark detail returned invalid JSON; using static details")
+            else:
+                if not isinstance(payload, dict) or not isinstance(payload.get("value"), list):
+                    logging.warning("LTA carpark detail had an unexpected response shape; using static details")
+                else:
+                    data = payload
+                    lta_fetch_timestamp = datetime.now(timezone.utc).isoformat()
 
     # Preserve the distinction between a real zero and a carpark omitted from
     # the latest live feed.
     matching_entries = [
         e
-        for e in data["value"]
+        for e in (data["value"] if data is not None else [])
         if isinstance(e, dict)
         and str(e.get("CarParkID", "")).strip() == raw_id
         and e.get("LotType") == "C"

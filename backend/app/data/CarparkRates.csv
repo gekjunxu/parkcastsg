@@ -45,11 +45,11 @@ Changi City Point,East,7.01am-6pm: $0.70 per ½ hr or part thereof.,6.01pm-7am: 
 Changi Village Hotel,East,8am-6pm: $2 for 1st hr; $1.50 for sub. hr,Aft 6pm: $5.35 per entry,Same as wkdays,Same as wkdays
 City Plaza,East,8am-5pm: $1.10 for 1st hr; $0.70 for sub. ½ hr,5pm-12am: $1.20 per entry; Aft 12am: $2.40 per entry,Same as wkdays,7am-12am: $1.20 per entry; Aft 12am: $2.40 per entry
 D'Resort,East,"Mon-Thu (excluding PH, Eve of PH & School Holiday) $0.024 per min; Max/day: $15 (Valid up to 12 midnight and not applicable for multiple entries).","Mon-Thu (excluding PH, Eve of PH & School Holiday) $0.024 per min; Max/day: $15 (Valid up to 12 midnight and not applicable for multiple entries).","Fri-Sat (Including PH, Eve of PH & School Holiday) $0.024 per min; 5pm-12am: $5 per entry. Max/day: $19.",Same as Saturday
-Downtown East,East,"Mon-Thu (excluding PH, Eve of PH & School Holiday) $0.024 per min; Max/day: $12.50 (Valid up to 12 midnight and not applicable for multiple entries).","Mon-Thu (excluding PH, Eve of PH & School Holiday) 5pm-12am: $2.40 per entry. Max/day:$12.50; Fri: $3.40 per entry.","Fri-Sat (Including PH, Eve of PH & School Holiday) $0.024 per min; 5pm-12am: $3.40 per entry. Max/day: $16.",Same as Saturday
+Downtown East,East,Mon-Thu 12am-5pm: $0.028 per min; Mon-Thu 5pm-12am: $2.45 per entry; Fri 12am-5pm: $0.030 per min; Fri 5pm-12am: $3.40 per entry,Mon-Fri 12pm-2pm: Free Lunch Time Parking; Max/day Mon-Thu: $16.00; Max/day Fri-Sun: $20.00 (not applicable for multiple entries),12am-5pm: $0.030 per min; 5pm-12am: $3.40 per entry; Max/day: $20.00,12am-5pm: $0.030 per min; 5pm-12am: $3.40 per entry; Max/day: $20.00
 East Coast Park E1/E2/E3 Off-Street,East,Daily: 0700-0700: $0.50 /30 Mins (Per Minute Charging),-,-,-
 Eastpoint Mall,East,"Daily: $1.20 for 1st hr or part thereof, $0.30 for sub. 15 mins or part thereof.",-,Same as wkdays,Same as wkdays
 Grand Mecure Roxy Hotel,East,Daily: $1.60 per hr,-,-,-
-IKEA (Tampines),East,Daily free: 7am-11pm,-,-,-
+IKEA (Tampines),East,Daily: Free parking for visitors; no maximum stay,-,-,-
 Katong Shopping Centre,East,7am-6pm: $1 per hr,Aft 6pm: $2 per entry,Same as wkdays,$2 per entry
 Katong Village,East,8am-6pm: $2.20 per hr,Aft 6pm: $6 per entry,Same as wkdays,Same as wkdays
 Lifelong Learning Institute,East,6am-5:59pm: $0.90 per ½ hr. Full Day Parking-6am-11:59pm: $16.,6pm-11.59pm: $3.21 per entry; 12am-5.59am: $12 per entry,Same as wkdays,6am-11:59pm: $3.21 per entry; 12am-5.59am: $12 per entry
@@ -256,7 +256,7 @@ Grand Pacific Hotel (Formerly Allson Hotel),South & CBD,7am-5pm: $1.32 per ½ hr
 Grand Park City Hall,South & CBD,7am-5pm: $3.28 for 1st hr; $1.55 for sub. ½ hr,Aft 5pm: $5.35 per entry,Same as wkdays,Same as wkdays
 Great Eastern Centre,South & CBD,8am-6pm: $1.80 per ½ hr (Car park at China square central; B2 closed from 12am-6am daily),6pm-12am: $3 per entry,8am-12am: $3 per entry,Same as Saturday
 Great World City,South & CBD,6.01am-5pm: $1.55 per hr,Aft 5pm: $3.30 per entry,$1.65 per hr (Max. of $6.00 per entry),Same as Saturday
-Harbourfront Centre,South & CBD,7am-6pm: $1.20 for 1st hr; $0.60 for sub. ½ hr,6pm-1am: $2.40 per entry; Aft 1am: $2.04 per hr,Same as wkdays,Same as wkdays
+Harbourfront Centre,South & CBD,7am-6pm: $1.60 for 1st hr; $0.80 for sub. 30 min,6pm-4am: $3.20 per entry; 4am-7am: $2.50 per hr,7am-6pm: $1.80 for 1st hr; $0.90 for sub. 30 min; 6pm-4am: $3.50 per entry; 4am-7am: $2.50 per hr,Same as weekdays
 Holiday Inn Atrium Singapore,South & CBD,7am-5pm: $1.80 per hr,Aft 5pm: $3.80 per entry,Same as wkdays,$3.80 per entry
 Hong Leong Building,South & CBD,7am-5pm: $2.50 per ½ hr,5pm-11pm: $3.10 per entry. Aft 11pm: Overnight Charge of $12,7am-1pm: $2.50 per ½ hr; 1pm-11pm: $3.10 per entry. Aft 11pm: Overnight Charge of $12,7am-11pm: $3.10 per entry. Aft 11pm: Overnight Charge of $12
 Hub Synergy Point (Formerly Apex tower),South & CBD,7am-6pm: $1 per ½ hr,6pm-12am: $1 per hr,7am-2pm: $1 per ½ hr; 2pm-12am: $1 per hr,7am-12am: $1 per hr
@@ -336,7 +336,7 @@ Bukit Timah Plaza (Multi-Storey Car Park),West,7.30am-5pm: $1.28 per hr,5pm-12am
 Bukit Timah Shopping Centre,West,8am-5pm: $1.25 per hr,Aft 5pm: $2.10 per entry,Same as wkdays,Same as wkdays
 Coronation Shopping Plaza,West,Daily(7.01am-7am): $2 per hr.,-,-,-
 Holland Road Shopping Centre,West,12am-8.59pm: $1.55 per ½ hr,Aft 9pm: $3.25 per entry,Same as wkdays,Same as wkdays
-IKEA (Alexandra),West,"Daily :$0.05 per min, $1.50 per 30 Mins (subsequently charged on a per minute basis)",-,-,-
+IKEA (Alexandra),West,Daily 9am-11pm: $0.06 per min; 3 hours free with same-day receipt scanned at exit (from 25 May 2026); no overnight parking,-,-,-
 IMM Building,West,Free for 1st 2hrs for first entry only. Chargeable after 2nd hr of 1st entry @ $1.07 /hr; $0.30 for sub. 15 mins.,-,-,-
 JCube,West,3.30am-5.59pm: $1.30 for 1st hr; sub 15 mins or part thereof: $0.30. *Free 2 Hour Parking from 12 - 2pm daily (Monday - Friday) from now to 15 Oct 2015.,6pm-3.29am: $2.50 per entry,Same as wkdays,Same as wkdays
 Junction 10,West,$1.25 for 1st hr; $0.65 for sub. hr,-,Same as wkdays,Same as wkdays
