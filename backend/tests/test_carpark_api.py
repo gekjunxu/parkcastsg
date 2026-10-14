@@ -55,7 +55,7 @@ class CarparkApiCompatibilityTests(unittest.TestCase):
         self.query = "?lat=1.264293167839738&lng=103.8223046936493"
 
     def test_static_routes_are_registered_before_detail_and_frontend_catchall(self):
-        route_names = [getattr(route, "name", None) for route in app.routes]
+        route_names = [getattr(route, "name", None) for route in carparks.router.routes]
         positions = {
             name: route_names.index(name)
             for name in (
@@ -68,9 +68,17 @@ class CarparkApiCompatibilityTests(unittest.TestCase):
         self.assertLess(positions["get_all_carparks"], positions["get_carpark"])
         self.assertLess(positions["get_nearby_carparks"], positions["get_carpark"])
         self.assertLess(positions["get_carparks_in_area"], positions["get_carpark"])
-        frontend_index = next((index for index, name in enumerate(route_names) if name == "serve_frontend"), None)
-        if frontend_index is not None:
-            self.assertLess(positions["get_carpark"], frontend_index)
+        app_routes = list(app.routes)
+        frontend_index = next(
+            (index for index, route in enumerate(app_routes) if getattr(route, "path", None) == "/{full_path:path}"),
+            None,
+        )
+        detail_index = next(
+            (index for index, route in enumerate(app_routes) if getattr(route, "endpoint", None) is carparks.get_carpark),
+            None,
+        )
+        if frontend_index is not None and detail_index is not None:
+            self.assertLess(detail_index, frontend_index)
 
     def test_nearby_default_radius_is_preserved(self):
         with patch.object(carparks.service, "nearby", new=AsyncMock(return_value=[])) as nearby:
