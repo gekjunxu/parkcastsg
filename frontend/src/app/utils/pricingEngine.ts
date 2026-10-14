@@ -272,7 +272,7 @@ export function parseTextRate(
 
     const window = getSegmentTimeWindow(segment);
     const aftMatch = segment.match(/aft(?:er)?\s*([0-9]+(?:\.[0-9]+)?(?:am|pm))/i);
-    let inWindow = previousWindowActive;
+    let inWindow: boolean = previousWindowActive;
 
     if (window) {
       inWindow = isHourInWindow(currentHour, window.startHour, window.endHour);
