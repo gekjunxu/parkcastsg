@@ -226,6 +226,20 @@ class OneMapClientTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(raised.exception.status_code, 502)
         self.assertEqual(auth_calls, 3)
 
+    async def test_search_transport_failure_is_an_upstream_error(self):
+        async def handler(request):
+            if request.url.path.endswith("getToken"):
+                return httpx.Response(200, json={
+                    "access_token": "token",
+                    "expiry_timestamp": "1700259200",
+                })
+            raise httpx.ConnectError("connection reset", request=request)
+
+        client, _ = await self.make_client(handler)
+        with self.assertRaises(LocationServiceError) as raised:
+            await client.search("place")
+        self.assertEqual(raised.exception.status_code, 502)
+
     async def test_missing_credentials_and_malformed_token_are_safe_failures(self):
         async def handler(request):
             self.fail("missing credentials must not call OneMap")

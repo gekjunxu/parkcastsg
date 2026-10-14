@@ -121,7 +121,6 @@ class OneMapClient:
             response = await self._request(
                 "POST",
                 AUTH_URL,
-                operation="authenticate",
                 json={"email": self.email, "password": self.password},
             )
             payload = self._json_object(response, "authenticate")
@@ -159,18 +158,20 @@ class OneMapClient:
             raise error
 
     async def _search_with_token(self, query: str, token: _Token) -> dict[str, Any]:
-        response = await self._request(
-            "GET",
-            SEARCH_URL,
-            operation="search",
-            params={
-                "searchVal": query,
-                "returnGeom": "Y",
-                "getAddrDetails": "Y",
-                "pageNum": "1",
-            },
-            headers={"Authorization": token.value},
-        )
+        try:
+            response = await self._request(
+                "GET",
+                SEARCH_URL,
+                params={
+                    "searchVal": query,
+                    "returnGeom": "Y",
+                    "getAddrDetails": "Y",
+                    "pageNum": "1",
+                },
+                headers={"Authorization": token.value},
+            )
+        except (httpx.HTTPError, TimeoutError, asyncio.TimeoutError) as exc:
+            raise self._upstream_error("search", "request_failed") from exc
         payload = self._json_object(response, "search")
         if self._is_token_rejection(response, payload):
             raise _TokenRejected()
@@ -182,12 +183,11 @@ class OneMapClient:
             raise self._upstream_error("search", "malformed_results")
         return payload
 
-    async def _request(self, method: str, url: str, *, operation: str, **kwargs) -> httpx.Response:
+    async def _request(self, method: str, url: str, **kwargs) -> httpx.Response:
         try:
             async with asyncio.timeout(TOTAL_REQUEST_DEADLINE):
                 return await self.http.request(method, url, timeout=HTTP_TIMEOUT, **kwargs)
         except (httpx.HTTPError, TimeoutError, asyncio.TimeoutError) as exc:
-            self._log_failure(operation, "request_failed")
             raise exc
 
     @staticmethod
