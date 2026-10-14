@@ -9,4 +9,3 @@ class LocationSuggestion(BaseModel):
     postal: str | None = None
     lat: float
     lng: float
-
