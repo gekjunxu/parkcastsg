@@ -1,7 +1,6 @@
 import unittest
-from unittest.mock import patch
 
-from app.api import carparks as carparks_api
+from app.carparks.sources.lta import LtaSource
 from app.data.lta_carpark_lookup import LTA_CARPARK_LOOKUP
 from app.data.lta_rates_lookup import canonicalise_name, lookup_rate
 from app.data.supplemental_carpark_lookup import SUPPLEMENTAL_CARPARK_LOOKUP
@@ -75,12 +74,8 @@ class RateLookupTests(unittest.TestCase):
 
 class StaticLtaFallbackTests(unittest.IsolatedAsyncioTestCase):
     async def test_static_lta_locations_are_returned_without_api_key(self):
-        with patch.object(carparks_api, "LTA_API_KEY", ""):
-            results = await carparks_api._fetch_lta_carparks(
-                1.352524,
-                103.9447,
-                100,
-            )
+        source = LtaSource(LTA_CARPARK_LOOKUP, lookup_rate, "")
+        results = await source.list_nearby(1.352524, 103.9447, 100)
 
         tampines_mall = next(
             (carpark for carpark in results if carpark.id == "LTA_63"),
@@ -93,8 +88,8 @@ class StaticLtaFallbackTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNotNone(tampines_mall.weekdays_rate_1)
 
     async def test_harbourfront_detail_is_available_without_lta_api_key(self):
-        with patch.object(carparks_api, "LTA_API_KEY", ""):
-            harbourfront = await carparks_api._get_lta_carpark("LTA_19", None, None)
+        source = LtaSource(LTA_CARPARK_LOOKUP, lookup_rate, "")
+        harbourfront = await source.get_by_id("LTA_19", None, None)
 
         self.assertEqual(harbourfront.name, "Harbourfront Centre")
         self.assertEqual(harbourfront.crowd_level, "unknown")

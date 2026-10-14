@@ -1,9 +1,10 @@
 import unittest
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from fastapi.testclient import TestClient
 
 from app.api import carparks
+from app.carparks.errors import CarparkSourceError
 from app.main import app
 import app.main as main
 
@@ -37,36 +38,75 @@ class SlashContainingCarparkIdTests(unittest.TestCase):
 
     def test_raw_slash_detail_id_is_preserved(self):
         with patch.object(
-            carparks,
-            "_get_supplemental_carpark",
-            return_value=example_carpark(SLASH_ID),
+            carparks.service,
+            "get_by_id",
+            new=AsyncMock(return_value=example_carpark(SLASH_ID)),
         ) as lookup:
             response = self.client.get(f"/api/v1/carparks/{SLASH_ID}{self.query}")
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["id"], SLASH_ID)
-        lookup.assert_called_once_with(SLASH_ID, 1.264293167839738, 103.8223046936493)
+        lookup.assert_awaited_once_with(SLASH_ID, 1.264293167839738, 103.8223046936493)
+
+
+class CarparkApiCompatibilityTests(unittest.TestCase):
+    def setUp(self):
+        self.client = TestClient(app)
+        self.query = "?lat=1.264293167839738&lng=103.8223046936493"
+
+    def test_static_routes_are_registered_before_detail_and_frontend_catchall(self):
+        paths = [getattr(route, "path", None) for route in app.routes]
+        positions = {
+            path: paths.index(path)
+            for path in (
+                "/api/v1/carparks/all",
+                "/api/v1/carparks/nearby",
+                "/api/v1/carparks/area",
+                "/api/v1/carparks/{carpark_id:path}",
+            )
+        }
+        self.assertLess(positions["/api/v1/carparks/all"], positions["/api/v1/carparks/{carpark_id:path}"])
+        self.assertLess(positions["/api/v1/carparks/nearby"], positions["/api/v1/carparks/{carpark_id:path}"])
+        self.assertLess(positions["/api/v1/carparks/area"], positions["/api/v1/carparks/{carpark_id:path}"])
+        frontend_index = next((index for index, path in enumerate(paths) if path == "/{full_path:path}"), None)
+        if frontend_index is not None:
+            self.assertLess(positions["/api/v1/carparks/{carpark_id:path}"], frontend_index)
+
+    def test_nearby_default_radius_is_preserved(self):
+        with patch.object(carparks.service, "nearby", new=AsyncMock(return_value=[])) as nearby:
+            response = self.client.get("/api/v1/carparks/nearby?lat=1.3&lng=103.8")
+
+        self.assertEqual(response.status_code, 200)
+        nearby.assert_awaited_once_with(1.3, 103.8, 500)
+
+    def test_source_errors_keep_their_http_status_and_detail(self):
+        error = CarparkSourceError("hdb", "list_nearby", None, 502, "upstream failed")
+        with patch.object(carparks.service, "nearby", new=AsyncMock(side_effect=error)):
+            response = self.client.get("/api/v1/carparks/nearby?lat=1.3&lng=103.8")
+
+        self.assertEqual(response.status_code, 502)
+        self.assertEqual(response.json()["detail"], "upstream failed")
 
     def test_encoded_slash_detail_id_is_preserved(self):
         encoded_id = SLASH_ID.replace("/", "%2F")
         with patch.object(
-            carparks,
-            "_get_supplemental_carpark",
-            return_value=example_carpark(SLASH_ID),
+            carparks.service,
+            "get_by_id",
+            new=AsyncMock(return_value=example_carpark(SLASH_ID)),
         ) as lookup:
             response = self.client.get(f"/api/v1/carparks/{encoded_id}{self.query}")
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["id"], SLASH_ID)
-        lookup.assert_called_once_with(SLASH_ID, 1.264293167839738, 103.8223046936493)
+        lookup.assert_awaited_once_with(SLASH_ID, 1.264293167839738, 103.8223046936493)
 
     def test_encoded_slash_detail_id_works_with_public_base_path(self):
         encoded_id = SLASH_ID.replace("/", "%2F")
         with patch.object(main, "app_base_path", "/parkcastsit"):
             with patch.object(
-                carparks,
-                "_get_supplemental_carpark",
-                return_value=example_carpark(SLASH_ID),
+                carparks.service,
+                "get_by_id",
+                new=AsyncMock(return_value=example_carpark(SLASH_ID)),
             ) as lookup:
                 response = self.client.get(
                     f"/parkcastsit/api/v1/carparks/{encoded_id}{self.query}"
@@ -74,7 +114,7 @@ class SlashContainingCarparkIdTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["id"], SLASH_ID)
-        lookup.assert_called_once_with(SLASH_ID, 1.264293167839738, 103.8223046936493)
+        lookup.assert_awaited_once_with(SLASH_ID, 1.264293167839738, 103.8223046936493)
 
 
 if __name__ == "__main__":
