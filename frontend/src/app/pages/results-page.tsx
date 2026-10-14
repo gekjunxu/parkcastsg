@@ -6,14 +6,16 @@ import { CarparkMap } from '../components/carpark-map'
 import { FilterChips } from '../components/filter-chips'
 import { LoadingSkeleton } from '../components/loading-skeleton'
 import { NavigationChooserModal } from '../components/navigation-chooser-modal'
+import { DestinationSearch } from '../components/destination-search'
 import { sortCarparks, getAvailabilityText, type Carpark } from '../data/carparks'
 import { applyCarparkFilters, FreeSundayPublicHolidayCarparkFilter, ShelteredCarparkFilter } from '../utils/carpark-filters'
-import { geocodeQuery, type Coordinates } from '../../api/geocode'
+import { geocodeQuery, type Coordinates, type LocationSuggestion } from '../../api/geocode'
 import { getNearbyCarparks, getAllCarparks, getCarparksInArea, transformCarpark } from '../../api/carparkService'
 import { getUserLocation } from '../../api/geolocation'
 import { getWeatherForecast, type WeatherData } from '../../api/weatherService'
 import { calculateLiveRates } from '../utils/pricingEngine'
 import { areaFromParams, areaSearchUrl, canSearchViewport, carparksInViewport, type MapViewport } from '../utils/mapViewport'
+import { destinationSearchUrl, textSearchUrl } from '../utils/destination-navigation'
 import '../../styles/parking-map.css'
 
 const SG = { lat: 1.3521, lng: 103.8198 }
@@ -102,7 +104,7 @@ export function ResultsPage() {
           if (cancelled) return
           setData(result.data); setUpdated(result.fetchedAt)
         } else {
-          const coords = hasCoords ? { lat: parsedLat, lng: parsedLng } : await geocodeQuery(destination)
+          const coords = hasCoords ? { lat: parsedLat, lng: parsedLng } : await geocodeQuery(destination, controller.signal)
           if (cancelled) return
           if (!coords) throw new Error('Location not found. Try a Singapore address or postal code.')
           setSearchCoords(coords)
@@ -141,11 +143,19 @@ export function ResultsPage() {
   const onPinClick = useCallback((id: string) => { setSelected(id); setListOpen(false) }, [])
   const onMapMoved = useCallback(() => setMoved(true), [])
 
-  function search(event: React.FormEvent) {
-    event.preventDefault()
+  function submitSearch() {
     if (!query.trim()) return
     setFiltersOpen(false); setListOpen(false)
-    navigate(`/results?q=${encodeURIComponent(query.trim())}&radius=${radius}`)
+    navigate(textSearchUrl(query, radius))
+  }
+  function search(event: React.FormEvent) {
+    event.preventDefault()
+    submitSearch()
+  }
+  function selectDestination(suggestion: LocationSuggestion) {
+    setFiltersOpen(false); setListOpen(false)
+    setQuery(suggestion.label)
+    navigate(destinationSearchUrl(suggestion, radius))
   }
   function explore(reset = false) {
     setFiltersOpen(false); setListOpen(false)
@@ -191,7 +201,7 @@ export function ResultsPage() {
     <header className="parking-header">
       <form onSubmit={search} className="parking-search">
         <button type="button" className="parking-icon-button" onClick={() => navigate('/')} aria-label="Back to home"><ArrowLeft size={20} /></button>
-        <label className="parking-search-input"><Search size={18} /><input aria-label="Search destination or postal code" placeholder="Destination or postal code" value={query} onChange={e => setQuery(e.target.value)} enterKeyHint="search" /></label>
+        <label className="parking-search-input"><Search size={18} /><DestinationSearch value={query} onChange={setQuery} onSelect={selectDestination} onSubmit={submitSearch} inputLabel="Search destination or postal code" placeholder="Destination or postal code" className="parking-search-destination-input" /></label>
         <button type="submit" className="parking-search-submit" disabled={!query.trim()} aria-label="Search carparks"><Search size={20} /></button>
       </form>
       <div className="parking-toolbar">

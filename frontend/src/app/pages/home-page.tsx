@@ -2,8 +2,10 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router'
 import { MapPin, Navigation, Map } from 'lucide-react'
 import { Button } from '../components/ui/button'
-import { Input } from '../components/ui/input'
+import { DestinationSearch } from '../components/destination-search'
+import type { LocationSuggestion } from '../../api/geocode'
 import { getUserLocation, GeolocationError } from '../../api/geolocation'
+import { destinationSearchUrl, textSearchUrl } from '../utils/destination-navigation'
 
 export function HomePage() {
   const navigate = useNavigate()
@@ -16,8 +18,13 @@ export function HomePage() {
 
   const handleSearch = () => {
     if (searchQuery.trim()) {
-      navigate(`/results?q=${encodeURIComponent(searchQuery)}&radius=${radius}`)
+      navigate(textSearchUrl(searchQuery, radius))
     }
+  }
+
+  const handleDestinationSelect = (suggestion: LocationSuggestion) => {
+    setSearchQuery(suggestion.label)
+    navigate(destinationSearchUrl(suggestion, radius))
   }
 
   const handleUseLocation = async () => {
@@ -41,7 +48,7 @@ export function HomePage() {
 
   const handleQuickAccess = (location: string) => {
     setSearchQuery(location)
-    navigate(`/results?q=${encodeURIComponent(location)}&radius=${radius}`)
+    navigate(textSearchUrl(location, radius))
   }
 
   return (
@@ -89,13 +96,14 @@ export function HomePage() {
             <div className='absolute left-3 top-1/2 -translate-y-1/2 text-gray-400'>
               <MapPin className='w-5 h-5' />
             </div>
-            <Input
-              type='text'
-              placeholder='Enter destination or postal code'
+            <DestinationSearch
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-              className='pl-10 pr-4 py-6 text-base border-gray-300 rounded-lg'
+              onChange={setSearchQuery}
+              onSelect={handleDestinationSelect}
+              onSubmit={handleSearch}
+              inputLabel='Destination or postal code'
+              placeholder='Enter destination or postal code'
+              className='w-full pl-10 pr-4 py-6 text-base border-gray-300 rounded-lg'
             />
           </div>
 

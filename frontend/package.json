@@ -6,7 +6,8 @@
     "scripts": {
         "dev": "vite",
         "build": "vite build",
-        "test": "node --import tsx --test src/app/utils/pricingEngine.test.ts src/app/utils/mapViewport.test.ts"
+        "test": "node --import tsx --test src/app/utils/pricingEngine.test.ts src/app/utils/mapViewport.test.ts src/api/geocode.test.ts",
+        "test:component": "vitest run --environment jsdom src/app/components/destination-search.test.ts"
     },
     "dependencies": {
         "@emotion/react": "11.14.0",
@@ -71,15 +72,19 @@
     },
     "devDependencies": {
         "@tailwindcss/vite": "4.1.12",
+        "@testing-library/dom": "^10.4.0",
+        "@testing-library/react": "^16.3.0",
         "@types/leaflet.markercluster": "^1.5.6",
         "@types/node": "^25.5.0",
         "@types/react": "^18.3.28",
         "@types/react-dom": "^18.3.7",
         "@vitejs/plugin-react": "4.7.0",
+        "jsdom": "^25.0.1",
         "react": "19.2.8",
         "react-dom": "19.2.8",
         "tailwindcss": "4.1.12",
         "tsx": "^4.20.6",
-        "vite": "^6.4.3"
+        "vite": "^6.4.3",
+        "vitest": "^2.1.9"
     }
 }
