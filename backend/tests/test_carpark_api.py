@@ -55,22 +55,22 @@ class CarparkApiCompatibilityTests(unittest.TestCase):
         self.query = "?lat=1.264293167839738&lng=103.8223046936493"
 
     def test_static_routes_are_registered_before_detail_and_frontend_catchall(self):
-        paths = [getattr(route, "path", None) for route in app.routes]
+        route_names = [getattr(route, "name", None) for route in app.routes]
         positions = {
-            path: paths.index(path)
-            for path in (
-                "/api/v1/carparks/all",
-                "/api/v1/carparks/nearby",
-                "/api/v1/carparks/area",
-                "/api/v1/carparks/{carpark_id:path}",
+            name: route_names.index(name)
+            for name in (
+                "get_all_carparks",
+                "get_nearby_carparks",
+                "get_carparks_in_area",
+                "get_carpark",
             )
         }
-        self.assertLess(positions["/api/v1/carparks/all"], positions["/api/v1/carparks/{carpark_id:path}"])
-        self.assertLess(positions["/api/v1/carparks/nearby"], positions["/api/v1/carparks/{carpark_id:path}"])
-        self.assertLess(positions["/api/v1/carparks/area"], positions["/api/v1/carparks/{carpark_id:path}"])
-        frontend_index = next((index for index, path in enumerate(paths) if path == "/{full_path:path}"), None)
+        self.assertLess(positions["get_all_carparks"], positions["get_carpark"])
+        self.assertLess(positions["get_nearby_carparks"], positions["get_carpark"])
+        self.assertLess(positions["get_carparks_in_area"], positions["get_carpark"])
+        frontend_index = next((index for index, name in enumerate(route_names) if name == "serve_frontend"), None)
         if frontend_index is not None:
-            self.assertLess(positions["/api/v1/carparks/{carpark_id:path}"], frontend_index)
+            self.assertLess(positions["get_carpark"], frontend_index)
 
     def test_nearby_default_radius_is_preserved(self):
         with patch.object(carparks.service, "nearby", new=AsyncMock(return_value=[])) as nearby:
