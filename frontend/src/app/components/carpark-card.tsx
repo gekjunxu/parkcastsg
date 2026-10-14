@@ -1,6 +1,14 @@
 import { MapPin, CloudRain } from 'lucide-react';
-import { type Carpark, getAvailabilityColor, getAvailabilityText, formatCarparkType } from '../data/carparks';
+import { type AvailabilityLevel, type Carpark, getAvailabilityColor, getAvailabilityText, formatCarparkType } from '../data/carparks';
 import { calculateLiveRates } from '../utils/pricingEngine';
+
+const RECOMMENDATION_AVAILABILITY_LABEL: Record<AvailabilityLevel, string> = {
+    high: 'High availability',
+    moderate: 'Moderate availability',
+    low: 'Low availability',
+    full: 'Full',
+    unknown: 'Availability unavailable',
+};
 
 interface CarparkCardProps {
     carpark: Carpark;
@@ -109,7 +117,7 @@ export function CarparkCard({ carpark, isSelected, showRainIcon, onClick, onView
                     {carpark.isRecommended && (
                         <div className="mt-2 pt-2 border-t border-gray-100">
                             <p className="text-xs text-gray-600">
-                                High availability · {carpark.isSheltered ? 'Sheltered' : formatCarparkType(carpark.carparkType)}
+                                {RECOMMENDATION_AVAILABILITY_LABEL[carpark.availabilityLevel]} · {carpark.isSheltered ? 'Sheltered' : formatCarparkType(carpark.carparkType)}
                             </p>
                         </div>
                     )}

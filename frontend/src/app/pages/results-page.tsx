@@ -6,7 +6,8 @@ import { CarparkMap } from '../components/carpark-map'
 import { FilterChips } from '../components/filter-chips'
 import { LoadingSkeleton } from '../components/loading-skeleton'
 import { NavigationChooserModal } from '../components/navigation-chooser-modal'
-import { sortCarparks, filterShelteredCarparks, getAvailabilityText, type Carpark } from '../data/carparks'
+import { sortCarparks, getAvailabilityText, type Carpark } from '../data/carparks'
+import { applyCarparkFilters, FreeSundayPublicHolidayCarparkFilter, ShelteredCarparkFilter } from '../utils/carpark-filters'
 import { geocodeQuery, type Coordinates } from '../../api/geocode'
 import { getNearbyCarparks, getAllCarparks, getCarparksInArea, transformCarpark } from '../../api/carparkService'
 import { getUserLocation } from '../../api/geolocation'
@@ -17,7 +18,9 @@ import '../../styles/parking-map.css'
 
 const SG = { lat: 1.3521, lng: 103.8198 }
 const PAGE_SIZE = 30
-type ViewMemory = { viewport: MapViewport | null; selected: string | null; listOpen: boolean; sort: 'recommended' | 'cheapest' | 'closest' | 'available'; rainMode: boolean }
+const shelteredFilter = new ShelteredCarparkFilter()
+const freeWeekendFilter = new FreeSundayPublicHolidayCarparkFilter()
+type ViewMemory = { viewport: MapViewport | null; selected: string | null; listOpen: boolean; sort: 'recommended' | 'cheapest' | 'closest' | 'available'; rainMode: boolean; freeWeekendMode: boolean }
 const savedViews = new Map<string, ViewMemory>()
 // Reuse the island-wide response across detail/back navigation. Nearby searches
 // never pay this network or marker cost. Explicit refresh bypasses this cache.
@@ -59,6 +62,7 @@ export function ResultsPage() {
   const [selected, setSelected] = useState<string | null>(saved?.selected ?? null)
   const [sort, setSort] = useState<'recommended' | 'cheapest' | 'closest' | 'available'>(saved?.sort ?? 'recommended')
   const [rainMode, setRainMode] = useState(saved?.rainMode ?? false)
+  const [freeWeekendMode, setFreeWeekendMode] = useState(saved?.freeWeekendMode ?? false)
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [listOpen, setListOpen] = useState(saved?.listOpen ?? false)
   const [limit, setLimit] = useState(PAGE_SIZE)
@@ -76,8 +80,8 @@ export function ResultsPage() {
   const listRef = useRef<HTMLDivElement>(null)
   const requestId = useRef(0)
   const focusedSearch = useRef(saved ? `${browsing ? 'map' : 'search'}:${queryKey}` : '')
-  const viewSnapshot = useRef<ViewMemory>({ viewport, selected, listOpen, sort, rainMode })
-  viewSnapshot.current = { viewport, selected, listOpen, sort, rainMode }
+  const viewSnapshot = useRef<ViewMemory>({ viewport, selected, listOpen, sort, rainMode, freeWeekendMode })
+  viewSnapshot.current = { viewport, selected, listOpen, sort, rainMode, freeWeekendMode }
 
   useEffect(() => { setQuery(destination) }, [destination])
   useEffect(() => {
@@ -126,10 +130,13 @@ export function ResultsPage() {
     return () => { cancelled = true; controller.abort() }
   }, [browsing, queryKey, refresh])
 
-  const pins = useMemo(() => rainMode ? filterShelteredCarparks(data) : data, [data, rainMode])
+  const pins = useMemo(() => applyCarparkFilters(data, [
+    ...(rainMode ? [shelteredFilter] : []),
+    ...(freeWeekendMode ? [freeWeekendFilter] : []),
+  ]), [data, rainMode, freeWeekendMode])
   const results = useMemo(() => sortCarparks(browsing && viewport ? carparksInViewport(pins, viewport) : pins, sort), [pins, browsing, viewport, sort])
   const chosen = pins.find(cp => cp.id === selected) ?? null
-  useEffect(() => { setLimit(PAGE_SIZE); listRef.current?.scrollTo(0, 0) }, [viewport, sort, rainMode, queryKey])
+  useEffect(() => { setLimit(PAGE_SIZE); listRef.current?.scrollTo(0, 0) }, [viewport, sort, rainMode, freeWeekendMode, queryKey])
   useEffect(() => { if (!loading && selected && !chosen) setSelected(null) }, [loading, selected, chosen])
   const onPinClick = useCallback((id: string) => { setSelected(id); setListOpen(false) }, [])
   const onMapMoved = useCallback(() => setMoved(true), [])
@@ -189,12 +196,12 @@ export function ResultsPage() {
       </form>
       <div className="parking-toolbar">
         <div className="parking-context"><strong>{title}</strong><span>{browsing || searchArea ? 'Pan to discover parking' : `${radius >= 1000 ? `${radius / 1000}km` : `${radius}m`} around destination`}</span></div>
-        <button className={`parking-tool${rainMode ? ' active' : ''}`} onClick={() => setFiltersOpen(!filtersOpen)} aria-expanded={filtersOpen} aria-controls="parking-filters"><SlidersHorizontal size={18} /><span>Filters{rainMode ? ' · 1' : ''}</span></button>
+        <button className={`parking-tool${rainMode || freeWeekendMode ? ' active' : ''}`} onClick={() => setFiltersOpen(!filtersOpen)} aria-expanded={filtersOpen} aria-controls="parking-filters"><SlidersHorizontal size={18} /><span>Filters{rainMode || freeWeekendMode ? ` · ${Number(rainMode) + Number(freeWeekendMode)}` : ''}</span></button>
         <button className="parking-icon-button" onClick={handleUseLocation} disabled={locating} aria-label={locating ? 'Finding your location' : 'Use my location'}><Navigation size={20} className={locating ? 'animate-pulse' : ''} /></button>
       </div>
       {filtersOpen && <section id="parking-filters" className="parking-filters" aria-label="Parking filters">
         {!browsing && !searchArea && <div className="parking-radius" role="group" aria-label="Search radius">{[300, 500, 1000, 2000].map(r => <button key={r} onClick={() => changeRadius(r)} aria-pressed={radius === r}>{r >= 1000 ? `${r / 1000}km` : `${r}m`}</button>)}</div>}
-        <FilterChips selectedFilter={sort} rainMode={rainMode} onFilterChange={setSort} onRainModeToggle={() => setRainMode(v => !v)} />
+        <FilterChips selectedFilter={sort} rainMode={rainMode} freeWeekendMode={freeWeekendMode} onFilterChange={setSort} onRainModeToggle={() => setRainMode(v => !v)} onFreeWeekendModeToggle={() => setFreeWeekendMode(v => !v)} />
         <p>{browsing ? 'Closest is measured from the centre of the map. ' : ''}Rain mode excludes known open-air carparks.</p>
         {!browsing && <button className="parking-text-button" onClick={() => explore(true)}>Explore all Singapore carparks</button>}
         <button className="parking-text-button" onClick={() => setFiltersOpen(false)}>Done</button>
@@ -222,7 +229,7 @@ export function ResultsPage() {
           <button className="parking-view-toggle" onClick={() => setListOpen(!listOpen)}>{listOpen ? <MapIcon size={18} /> : <List size={18} />}{listOpen ? 'Map' : 'List'}{listOpen ? <ChevronDown size={16} /> : <ChevronUp size={16} />}</button>
         </div>
         {error && <div className="parking-empty" role="alert"><p>{error}</p><button onClick={() => setRefresh(v => v + 1)}>Try again</button></div>}
-        {!loading && !error && results.length === 0 && <div className="parking-empty"><p>No carparks {subtitle}{rainMode ? ' with this filter' : ''}.</p>{rainMode && <button onClick={() => setRainMode(false)}>Remove rain filter</button>}{!browsing && <button onClick={() => explore()}>Explore the map</button>}{browsing && <p>Pan or zoom out to see more parking.</p>}</div>}
+        {!loading && !error && results.length === 0 && <div className="parking-empty"><p>No carparks {subtitle}{rainMode || freeWeekendMode ? ' with the selected filters' : ''}.</p>{rainMode && <button onClick={() => setRainMode(false)}>Remove rain filter</button>}{freeWeekendMode && <button onClick={() => setFreeWeekendMode(false)}>Remove free Sun &amp; PH filter</button>}{!browsing && <button onClick={() => explore()}>Explore the map</button>}{browsing && <p>Pan or zoom out to see more parking.</p>}</div>}
         {chosen && <div className="parking-selection">
           <div className="parking-selection-title"><h2>{chosen.name}</h2><button className="parking-icon-button" onClick={() => setSelected(null)} aria-label="Close selected carpark"><X size={18} /></button></div>
           <p className="parking-selection-address">{chosen.address}</p>
