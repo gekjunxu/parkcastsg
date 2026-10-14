@@ -2,78 +2,112 @@
 
 ## Context
 
-The backend currently concentrates HDB, LTA, and supplemental carpark logic in `backend/app/api/carparks.py`. That module combines HTTP routing, source-specific upstream requests, static lookup behavior, caching, normalization, detail lookup, radius filtering, and cross-source deduplication. This makes a source-specific failure—such as the slash-containing supplemental ID failure in staging—hard to isolate and test.
+The staging backend currently concentrates HDB, LTA, and supplemental carpark logic in `backend/app/api/carparks.py`. That module combines HTTP routing, source-specific upstream requests, static lookup behavior, normalization, detail lookup, radius filtering, and cross-source deduplication. A source-specific failure—such as the slash-containing supplemental ID failure—is therefore difficult to isolate and test.
 
 ## Goal
 
-Separate each carpark data source behind a focused backend adapter while preserving the existing public API response shape and frontend behavior. Source failures and source-specific rules should be visible at the source boundary, and common aggregation behavior should live in one service layer.
+Separate each carpark data source behind a focused adapter while preserving the existing API response shape and frontend behavior. Each adapter normalizes its own data directly into the shared `CarparkAvailability` model. A service layer owns only cross-source coordination and common filtering rules.
 
 ## Scope and constraints
 
 - Backend-only refactor; the frontend continues to consume the existing `NearbyCarpark` shape and `source` field.
-- Preserve the existing endpoints, query parameters, response fields, and source labels (`hdb`, `lta`, `supplemental`).
-- Preserve current graceful-degradation behavior: LTA may return static locations without live availability; supplemental locations have unknown availability; HDB upstream failures remain API errors.
-- Do not add third-party dependencies.
-- Include regression coverage for supplemental IDs containing `/` and ensure the detail route can resolve them through the public path.
-- Keep the current working tree's unrelated changes out of this refactor.
+- Preserve the existing endpoints, query parameters, response fields, defaults, source labels, ordering, and carpark IDs.
+- Preserve source error policy: missing record → `404`; HDB upstream failure → `502`; LTA upstream failure → static fallback; supplemental data is static-only.
+- Do not introduce availability caching in this refactor. The inspected staging module has no availability cache. Any future cache must be separately designed with expiry, concurrency, and stale-data rules.
+- Include the slash-route fix as the first independently tested change.
+- Keep unrelated working-tree changes out of this refactor.
 
-## Proposed architecture
+## Adapter contract
 
-### Domain models
+All adapters implement the same source-neutral protocol and return the shared model directly:
 
-Move shared response models and source-neutral types into a focused carpark module. The existing `CarparkAvailability` response model remains the contract returned by the API. A source adapter may use internal records, but the service owns conversion into the response model so API output stays stable.
+```python
+class CarparkSource(Protocol):
+    source_name: str
 
-### Source adapters
+    def owns_id(self, carpark_id: str) -> bool: ...
 
-Create one adapter per source with a small, explicit interface:
+    async def list_nearby(
+        self, lat: float, lng: float, radius: int
+    ) -> list[CarparkAvailability]: ...
 
-- `HdbSource`: fetches live HDB availability, resolves HDB details, and applies HDB static metadata.
-- `LtaSource`: loads LTA static locations/rates, fetches optional live LTA availability, resolves LTA details, and owns the static fallback behavior.
-- `SupplementalSource`: loads geocoded supplemental locations and rates, emits unknown availability, and resolves supplemental details including IDs containing punctuation or slashes.
+    async def get_by_id(
+        self,
+        carpark_id: str,
+        lat: float | None,
+        lng: float | None,
+    ) -> CarparkAvailability: ...
+```
 
-Each adapter owns its upstream URL, cache, source-specific parsing, source-specific error policy, and static lookup dependencies. It must not know about FastAPI request objects or other sources.
+The contract has no FastAPI types and no knowledge of other sources. Each adapter owns its source URL, parsing, source-specific metadata joins, source-specific logging, and source-specific fallback policy. Adapters may prefilter static candidates before making upstream requests. They must use the shared distance helper rather than implementing separate distance formulas.
 
-### Aggregation service
+The adapters are:
 
-Create a source-neutral service that receives the registered adapters and provides:
+- `HdbSource`: live HDB availability, HDB metadata, lot-type totals, and HDB detail lookup.
+- `LtaSource`: static LTA locations/rates, optional live availability, and static fallback when the API key or upstream feed is unavailable. It must filter the static LTA lookup by radius before making the live LTA request.
+- `SupplementalSource`: static geocoded locations and rates, unknown availability, and supplemental detail lookup. It returns all in-range supplemental records; it does not import LTA lookup names or suppress another source.
 
-- fetch all or nearby carparks from every source;
-- merge results with deterministic source priority and ID deduplication;
-- resolve one carpark by ID through the appropriate source;
-- apply common distance/radius behavior and preserve response ordering.
+## Shared models, helpers, and errors
 
-The service is the only layer that coordinates multiple sources. Source registration should be explicit so adding another source does not require editing each endpoint branch.
+Move `CarparkAvailability` and `LotTypeAvailability` into a source-neutral carpark domain module. Move common geometry, crowd-level, rate-field, lot-type, and conservative name-canonicalization helpers there. The existing rates lookup may re-export the canonicalization helper so its current callers remain compatible.
 
-### API layer
+Define source errors explicitly:
 
-Reduce `backend/app/api/carparks.py` to route definitions, query validation, service calls, and HTTP error translation. The detail route must accept a slash-containing ID through a path converter or an equivalent route-safe lookup mechanism, while retaining the existing public URL format.
+- `CarparkSourceError` includes `source_name`, `operation`, optional `carpark_id`, `status_code`, and `detail`.
+- `CarparkNotFoundError` is a `CarparkSourceError` with status `404`.
+- HDB adapter failures use status `502` and log source, operation, and carpark ID when applicable.
+- LTA upstream failures log source and operation, then return static records with `unknown` availability rather than raising.
+- Supplemental lookup failures use `404` for missing IDs; it has no upstream failure mode.
 
-## Error handling
+The API layer translates these errors to HTTP responses; adapters do not import FastAPI.
 
-- Source adapters raise typed or clearly scoped source errors for failures they cannot degrade gracefully.
-- The service preserves the current policy: HDB failures fail the request; LTA availability failures degrade to static/empty live data; supplemental data is static-only.
-- The API layer translates source/service errors into the existing HTTP status categories and response format.
-- Errors should identify the source and operation in logs without leaking API credentials.
+## Aggregation service and duplicate ownership
 
-## Testing strategy
+`CarparkService` receives an explicit ordered registry of adapters: HDB, LTA, then supplemental. It owns:
 
-- Unit-test each adapter independently using local/static fixtures and narrowly scoped upstream response stubs only where network calls are unavoidable.
-- Unit-test the aggregation service for merge order, deduplication, radius filtering, and source selection.
-- Add an API regression test that resolves `SUPP_KEPPEL_BAY_TOWER_/_HARBOURFRONT_TOWER_ONE` through the detail route and returns `200` with the supplemental record.
-- Retain and run all existing backend tests, including static LTA fallback and rate coverage tests.
-- Verify the frontend contract remains unchanged by asserting the response model fields and source labels.
+- fetching nearby results from all adapters;
+- HDB-first ID deduplication;
+- all-carpark center/radius behavior;
+- map-area bounds validation, enclosing-radius calculation, and inclusive edge filtering;
+- source selection for detail lookup based on `owns_id()`.
+
+Cross-source name suppression also belongs here. For list responses only, the service builds canonical development-name keys from the LTA results and removes supplemental records whose canonical name matches an LTA record. This replaces the current supplemental-to-LTA import coupling. Direct supplemental detail lookup is never suppressed: existing IDs, including `SUPP_KEPPEL_BAY_TOWER_/_HARBOURFRONT_TOWER_ONE`, remain resolvable.
+
+The service does not contain HDB, LTA, or supplemental parsing branches. Its only source-aware rule is the explicitly documented cross-source suppression and HDB-first merge priority.
+
+## API layer and route compatibility
+
+Reduce `backend/app/api/carparks.py` to route definitions, query validation, service calls, and error translation. The detail route must use a path converter:
+
+```python
+@router.get("/carparks/{carpark_id:path}", response_model=CarparkAvailability)
+```
+
+It remains after the static `/all`, `/nearby`, and `/area` routes so those routes are selected first. The route must accept both raw `/` and encoded `%2F` forms of the slash-containing ID, with and without the `/parkcastsit` application base path. The frontend-visible API response remains unchanged.
+
+## Compatibility tests
+
+The refactor must have concrete tests for:
+
+- raw and encoded slash-containing detail URLs, including `/parkcastsit` path stripping;
+- `/all`, `/nearby`, and `/area` being registered before the detail route and before the frontend catch-all;
+- `/area` bounds validation, inclusive north/south/east/west edges, and no upstream call for invalid or oversized bounds;
+- LTA live availability where `AvailableLots=0` remains distinct from a carpark missing from the live feed;
+- existing response defaults, source labels, ordering, HDB-first ID priority, and static LTA fallback;
+- source errors with the expected status and logging context.
 
 ## Out of scope
 
 - Frontend source-specific modules or UI changes.
-- Changing carpark IDs already emitted by the API.
-- Replacing the upstream HDB, LTA, or rates data sources.
-- Broad renaming or unrelated cleanup outside the carpark backend boundary.
+- Changing existing carpark IDs or replacing upstream HDB, LTA, or rates data sources.
+- New availability caching, retries, stale-data serving, or cache invalidation.
+- Broad cleanup outside the carpark backend boundary.
 
 ## Acceptance criteria
 
-1. The API endpoints and response JSON remain backward compatible for existing HDB, LTA, and supplemental records.
-2. HDB, LTA, and supplemental logic can be read and tested independently.
-3. A failure in one source is handled according to that source's policy and does not obscure the others' behavior.
-4. The staging slash-containing supplemental detail URL no longer returns the generic 404.
-5. All existing backend tests plus the new adapter and routing tests pass.
+1. Each source adapter has the explicit protocol above and returns `CarparkAvailability` directly.
+2. The service owns cross-source suppression, deduplication, ordering, area filtering, and detail source selection without source parsing branches.
+3. LTA static radius prefiltering prevents unnecessary live upstream requests.
+4. Existing API JSON and fallback behavior remain compatible.
+5. Raw and encoded slash-containing detail URLs work under `/parkcastsit` and without it.
+6. All existing backend tests plus the new adapter, service, compatibility, and route tests pass.

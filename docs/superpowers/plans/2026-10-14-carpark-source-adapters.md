@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Split HDB, LTA, and supplemental carpark behavior into independently testable adapters while preserving the API contract and fixing slash-containing supplemental detail URLs.
+**Goal:** Separate HDB, LTA, and supplemental carpark behavior into independently testable adapters while preserving the API contract and fixing slash-containing supplemental detail URLs first.
 
-**Architecture:** Keep shared response models and geometry helpers in a carpark domain package. Give each data source one adapter implementing a common protocol, and place multi-source fetching, deduplication, source selection, and area filtering in `CarparkService`. Leave `backend/app/api/carparks.py` as a thin FastAPI layer, including a path converter for IDs containing `/`.
+**Architecture:** Make the slash-route change as a standalone, tested first commit. Then move shared models/helpers into a source-neutral carpark package, give each source an adapter that returns `CarparkAvailability` directly, and put only cross-source coordination in `CarparkService`. Keep `backend/app/api/carparks.py` as a thin FastAPI layer.
 
 **Tech Stack:** Python 3.13, FastAPI 0.141.1, Pydantic, httpx 0.28.1, unittest, FastAPI `TestClient`.
 
@@ -13,23 +13,60 @@
 ## Global Constraints
 
 - Backend-only refactor; keep the frontend `NearbyCarpark` shape and `source` field unchanged.
-- Preserve existing endpoints, query parameters, response fields, and source labels (`hdb`, `lta`, `supplemental`).
-- Preserve source fallback behavior: HDB failures are API errors; LTA can return static locations without live availability; supplemental data is static-only.
-- Do not add third-party dependencies.
-- Keep existing carpark IDs unchanged, including IDs containing `/`.
+- Preserve endpoints, query parameters, response fields, defaults, source labels, ordering, and existing carpark IDs.
+- Missing record → `404`; HDB upstream failure → `502`; LTA upstream failure → static fallback; supplemental data is static-only.
+- Do not introduce availability caching, retries, stale-data serving, or cache invalidation in this refactor.
+- Adapters return `CarparkAvailability` directly and have no FastAPI dependencies or cross-source imports.
 - Keep unrelated working-tree changes out of the refactor.
 
 ## Review Focus
 
-- A supplemental ID containing `/` must route to its detail adapter and return `200`; pin this in the API regression test in Task 6.
-- An unset or failing LTA API key must preserve static LTA results with `unknown` availability; pin this in Task 3.
-- A malformed or failed HDB upstream response must produce the existing `502` behavior; pin this in Task 2.
-- Duplicate IDs from multiple sources must retain deterministic HDB-first priority; pin this in Task 5.
-- Invalid or oversized map bounds must not trigger upstream calls; retain and update the area tests in Task 6.
+- Raw and encoded `%2F` supplemental detail URLs, with and without `/parkcastsit`, must return the same record; Task 1 and Task 7 test this.
+- Static `/all`, `/nearby`, and `/area` routes must precede the path-converter detail route and frontend catch-all; Task 7 tests route ordering.
+- LTA must prefilter static locations before a live upstream request, and live zero must differ from missing availability; Task 4 tests both.
+- Supplemental/LTA duplicate suppression must occur only in list aggregation while direct supplemental detail remains resolvable; Task 6 tests both.
+- Existing bounds validation, inclusive area edges, defaults, ordering, and HDB-first priority must remain unchanged; Tasks 6–7 pin these behaviors.
 
 ---
 
-### Task 1: Establish shared carpark domain types and source protocol
+### Task 1: Fix slash-containing detail routing first
+
+**Files:**
+- Modify: `backend/app/api/carparks.py:652`
+- Create: `backend/tests/test_carpark_api.py`
+
+**Interfaces:**
+- Change only the detail decorator to `@router.get("/carparks/{carpark_id:path}", response_model=CarparkAvailability)`; keep the route after `/all`, `/nearby`, and `/area`.
+- The route must pass `SUPP_KEPPEL_BAY_TOWER_/_HARBOURFRONT_TOWER_ONE` unchanged to the existing lookup path.
+
+- [ ] **Step 1: Write failing route tests**
+
+  Use `TestClient` and patch the existing supplemental detail helper with a known `CarparkAvailability`. Test both the raw slash URL and the encoded `%2F` URL under `/api/v1`, then repeat one encoded request under `/parkcastsit/api/v1` while temporarily setting `app.main.app_base_path` to `/parkcastsit`. Assert HTTP `200`, the unchanged ID, and the stub call's exact ID.
+
+- [ ] **Step 2: Run the focused tests and verify the expected failure**
+
+  Run: `$env:PYTHONPATH='backend'; python -m unittest backend/tests/test_carpark_api.py -v`
+
+  Expected: FAIL with `404` against the current `{carpark_id}` route because the slash creates another path segment.
+
+- [ ] **Step 3: Implement the minimal path-converter change**
+
+  Change only the decorator path to `{carpark_id:path}`. Do not refactor the handler yet; this commit proves the routing fix independently.
+
+- [ ] **Step 4: Run the focused tests and verify the route fix**
+
+  Run: `$env:PYTHONPATH='backend'; python -m unittest backend/tests/test_carpark_api.py -v`
+
+  Expected: PASS for raw, encoded, and `/parkcastsit` requests.
+
+- [ ] **Step 5: Commit the independently tested fix**
+
+  ```powershell
+  git add -- backend/app/api/carparks.py backend/tests/test_carpark_api.py
+  git commit -m "fix: route slash-containing carpark IDs"
+  ```
+
+### Task 2: Establish shared domain types, helpers, and source errors
 
 **Files:**
 - Create: `backend/app/carparks/__init__.py`
@@ -38,27 +75,28 @@
 - Create: `backend/app/carparks/errors.py`
 - Create: `backend/app/carparks/sources/__init__.py`
 - Create: `backend/app/carparks/sources/base.py`
+- Modify: `backend/app/data/lta_rates_lookup.py`
 - Test: `backend/tests/test_carpark_foundation.py`
 
 **Interfaces:**
-- `CarparkAvailability` and `LotTypeAvailability` move unchanged from `backend/app/api/carparks.py` to `carparks.models`.
-- `haversine(lat1: float, lng1: float, lat2: float, lng2: float) -> float`, `crowd_level(available: int, total: int) -> str`, `crowd_level_absolute(available: int) -> str`, `rate_field(value: str) -> str | None`, and `normalize_lot_types(items: list[dict]) -> list[LotTypeAvailability]` live in `carparks.helpers`.
-- `CarparkSource` protocol defines `source_name: str`, `owns_id(carpark_id: str) -> bool`, `list_nearby(lat: float, lng: float, radius: int) -> list[CarparkAvailability]`, and `get_by_id(carpark_id: str, lat: float | None, lng: float | None) -> CarparkAvailability`.
-- `CarparkSourceError` carries `source_name`, `status_code`, and `detail`; `CarparkNotFoundError` subclasses it with `status_code=404` for source-neutral lookup failures.
+- Move `CarparkAvailability` and `LotTypeAvailability` unchanged into `carparks.models`.
+- Expose `haversine`, `crowd_level`, `crowd_level_absolute`, `rate_field`, `normalize_lot_types`, and `canonicalise_name` from `carparks.helpers`; keep `lta_rates_lookup.canonicalise_name` as a compatibility re-export.
+- Define `CarparkSource` with `source_name: str`, `owns_id(carpark_id: str) -> bool`, `list_nearby(lat: float, lng: float, radius: int) -> list[CarparkAvailability]`, and `get_by_id(carpark_id: str, lat: float | None, lng: float | None) -> CarparkAvailability`.
+- Define `CarparkSourceError(source_name: str, operation: str, carpark_id: str | None, status_code: int, detail: str)` and `CarparkNotFoundError` as its `404` subclass.
 
 - [ ] **Step 1: Write failing foundation tests**
 
-  Test model serialization preserves the existing JSON field names and defaults. Test `haversine` returns approximately 0 for identical points and a positive distance for separated points. Test each helper's existing crowd/rate/lot-type behavior.
+  Test model field names/defaults, helper behavior copied from the existing module, canonical name compatibility, source protocol shape, and error fields/statuses.
 
-- [ ] **Step 2: Run the focused tests and verify they fail for missing modules/functions**
+- [ ] **Step 2: Run the focused tests and verify they fail**
 
   Run: `$env:PYTHONPATH='backend'; python -m unittest backend/tests/test_carpark_foundation.py -v`
 
-  Expected: FAIL because the new domain modules do not exist yet.
+  Expected: FAIL because the new domain modules do not exist.
 
-- [ ] **Step 3: Implement the shared models, helpers, errors, and protocol**
+- [ ] **Step 3: Implement the shared modules and compatibility re-export**
 
-  Copy behavior exactly from the existing module, remove FastAPI dependencies from the new domain package, and keep the source protocol free of HTTP request/response types.
+  Keep the helpers independent of FastAPI and data-source modules. Do not add caching or source-specific branches to the shared package.
 
 - [ ] **Step 4: Run the focused tests and verify they pass**
 
@@ -69,11 +107,11 @@
 - [ ] **Step 5: Commit the foundation**
 
   ```powershell
-  git add -- backend/app/carparks backend/tests/test_carpark_foundation.py
+  git add -- backend/app/carparks backend/app/data/lta_rates_lookup.py backend/tests/test_carpark_foundation.py
   git commit -m "refactor: add carpark source domain types"
   ```
 
-### Task 2: Extract the HDB source adapter
+### Task 3: Extract the HDB source adapter
 
 **Files:**
 - Create: `backend/app/carparks/sources/hdb.py`
@@ -81,12 +119,12 @@
 
 **Interfaces:**
 - `HdbSource(lookup: Mapping[str, dict], availability_url: str = HDB_AVAILABILITY_URL, transport: httpx.AsyncBaseTransport | None = None)` implements `CarparkSource`.
-- `HdbSource.list_nearby(...)` preserves current HDB metadata joins, lot-type totals, crowd-level calculation, radius filtering, and timestamp handling.
-- `HdbSource.get_by_id(...)` preserves current HDB detail behavior and error statuses without importing FastAPI.
+- `HdbSource.list_nearby(...)` and `get_by_id(...)` return `CarparkAvailability` directly and preserve metadata joins, lot types, crowd levels, radius filtering, timestamps, and defaults.
+- `HdbSource.owns_id()` accepts IDs that are not prefixed `LTA_` or `SUPP_`.
 
-- [ ] **Step 1: Write failing adapter tests**
+- [ ] **Step 1: Write failing HDB adapter tests**
 
-  Use `httpx.MockTransport` to test a valid HDB payload, a failed upstream response, malformed JSON/shape, and a detail lookup. Assert the same `CarparkAvailability` fields and `CarparkSourceError(status_code=502)` behavior currently exposed by the API.
+  With `httpx.MockTransport`, test a valid payload, failed upstream response, malformed JSON/shape, detail lookup, and `assertLogs` content containing source, operation, and carpark ID for a detail failure. Assert `CarparkSourceError(status_code=502)` for upstream failures.
 
 - [ ] **Step 2: Run the focused tests and verify they fail**
 
@@ -96,7 +134,7 @@
 
 - [ ] **Step 3: Implement `HdbSource`**
 
-  Move only HDB upstream access, parsing, metadata joining, and detail resolution from `carparks.py`. Use the injected transport for tests and retain the ten-second timeout for real requests.
+  Move only HDB request, parsing, metadata joining, and detail logic. Use the injected transport for tests and keep the existing ten-second request timeout. Do not add a cache.
 
 - [ ] **Step 4: Run the focused tests and verify they pass**
 
@@ -111,7 +149,7 @@
   git commit -m "refactor: extract HDB carpark source"
   ```
 
-### Task 3: Extract the LTA source adapter
+### Task 4: Extract the LTA source adapter with prefiltering and fallback
 
 **Files:**
 - Create: `backend/app/carparks/sources/lta.py`
@@ -119,13 +157,13 @@
 
 **Interfaces:**
 - `LtaSource(lookup: Mapping[str, dict], rates: Callable[[str], Mapping[str, str] | None], api_key: str, availability_url: str = LTA_AVAILABILITY_URL, transport: httpx.AsyncBaseTransport | None = None)` implements `CarparkSource`.
-- `LtaSource.owns_id()` accepts only IDs with the `LTA_` prefix.
-- `LtaSource.list_nearby(...)` preserves static geometry filtering, optional live availability, HDB-agency exclusion, rate lookup, and `unknown` fallback behavior.
-- `LtaSource.get_by_id(...)` returns static detail data when live availability is unavailable and retains live timestamps/counts when present.
+- `LtaSource.owns_id()` accepts only `LTA_` IDs.
+- `LtaSource.list_nearby(...)` filters the static lookup by radius before any live request; if no static candidate is nearby, it must not create a live upstream request.
+- `LtaSource` returns static `CarparkAvailability` records with `crowd_level="unknown"` when the key is missing or upstream data is invalid/unavailable. A live `AvailableLots=0` entry remains `crowd_level="full"`, distinct from a missing entry.
 
-- [ ] **Step 1: Write failing adapter tests**
+- [ ] **Step 1: Write failing LTA adapter tests**
 
-  Cover no API key, successful live data with multiple lot entries, failed/invalid live data fallback, HDB-agency exclusion, unknown IDs, and detail lookup for `LTA_19`. Assert that static results remain available and availability is `unknown` when appropriate.
+  Cover no API key, no nearby candidates with a transport-call counter, successful live data with multiple lot entries, live zero, missing live record, failed/invalid live data fallback, HDB-agency exclusion, unknown ID, detail lookup, and warning logs containing source/operation.
 
 - [ ] **Step 2: Run the focused tests and verify they fail**
 
@@ -135,7 +173,7 @@
 
 - [ ] **Step 3: Implement `LtaSource`**
 
-  Move LTA-specific static lookup, upstream parsing, optional API-key behavior, rate enrichment, and detail resolution. Keep source errors/logging scoped to LTA and avoid FastAPI imports.
+  Move LTA-specific static lookup, prefilter, live parsing, rate enrichment, fallback behavior, detail lookup, and logging. Do not add a cache.
 
 - [ ] **Step 4: Run the focused tests and verify they pass**
 
@@ -150,21 +188,21 @@
   git commit -m "refactor: extract LTA carpark source"
   ```
 
-### Task 4: Extract the supplemental source adapter and preserve slash IDs
+### Task 5: Extract the supplemental source without cross-source suppression
 
 **Files:**
 - Create: `backend/app/carparks/sources/supplemental.py`
 - Test: `backend/tests/test_supplemental_source.py`
 
 **Interfaces:**
-- `SupplementalSource(lookup: Mapping[str, dict], id_lookup: Mapping[str, str], rates: Callable[[str], Mapping[str, str] | None], lta_development_names: Collection[str])` implements `CarparkSource`.
-- `SupplementalSource.owns_id()` accepts only IDs with the `SUPP_` prefix.
-- `SupplementalSource.list_nearby(...)` preserves duplicate suppression against LTA development names, rate enrichment, static-only availability, and distance calculation.
-- `SupplementalSource.get_by_id(...)` resolves `SUPP_KEPPEL_BAY_TOWER_/_HARBOURFRONT_TOWER_ONE` exactly as emitted by the nearby endpoint.
+- `SupplementalSource(lookup: Mapping[str, dict], id_lookup: Mapping[str, str], rates: Callable[[str], Mapping[str, str] | None])` implements `CarparkSource`.
+- `SupplementalSource.owns_id()` accepts only `SUPP_` IDs.
+- `list_nearby(...)` returns all in-range supplemental records with static-only unknown availability; it does not import LTA lookup names or suppress another source.
+- `get_by_id(...)` resolves `SUPP_KEPPEL_BAY_TOWER_/_HARBOURFRONT_TOWER_ONE` exactly as emitted by list results.
 
-- [ ] **Step 1: Write failing adapter tests**
+- [ ] **Step 1: Write failing supplemental tests**
 
-  Assert the nearby result contains the exact slash-containing ID, the detail lookup returns the matching name and rates, duplicate LTA-covered names are suppressed, and unknown supplemental IDs produce `CarparkNotFoundError`.
+  Assert the exact slash-containing ID and rates, static-only defaults, no cross-source imports/suppression, and `CarparkNotFoundError` for an unknown ID.
 
 - [ ] **Step 2: Run the focused tests and verify they fail**
 
@@ -174,7 +212,7 @@
 
 - [ ] **Step 3: Implement `SupplementalSource`**
 
-  Move supplemental lookup, ID generation/lookup, rate enrichment, and static detail behavior. Do not sanitize or rename existing IDs; slash preservation is required for compatibility.
+  Move supplemental lookup, ID generation/lookup, rate enrichment, and static detail behavior. Preserve all existing IDs, including punctuation and `/`; do not introduce a renamed/sanitized ID scheme.
 
 - [ ] **Step 4: Run the focused tests and verify they pass**
 
@@ -189,23 +227,23 @@
   git commit -m "refactor: extract supplemental carpark source"
   ```
 
-### Task 5: Add the multi-source service
+### Task 6: Add the cross-source aggregation service
 
 **Files:**
 - Create: `backend/app/carparks/service.py`
 - Test: `backend/tests/test_carpark_service.py`
 
 **Interfaces:**
-- `CarparkService(sources: Sequence[CarparkSource])` stores an explicit source registry in HDB-first order.
-- `async nearby(lat: float, lng: float, radius: int) -> list[CarparkAvailability]` gathers all sources, deduplicates by ID with first-source priority, and sorts by distance.
-- `async all() -> list[CarparkAvailability]` calls `nearby(1.3521, 103.8198, 100_000)` and sorts by ID as before.
-- `async area(north: float, south: float, east: float, west: float) -> list[CarparkAvailability]` validates bounds, computes the enclosing radius, calls `nearby`, and returns only in-rectangle results.
-- `async get_by_id(carpark_id: str, lat: float | None, lng: float | None) -> CarparkAvailability` dispatches to the first adapter whose `owns_id()` matches and raises `CarparkNotFoundError` when no source resolves it.
-- `build_default_service() -> CarparkService` wires the existing lookup tables, rate function, environment LTA key, and source adapters.
+- `CarparkService(sources: Sequence[CarparkSource])` stores explicit HDB-first, LTA-second, supplemental-third source order.
+- `async nearby(lat: float, lng: float, radius: int) -> list[CarparkAvailability]` asks each adapter for nearby records, applies ID deduplication with HDB-first priority, suppresses supplemental records whose canonical names match an LTA result, and sorts by distance.
+- `async all() -> list[CarparkAvailability]` uses Singapore center `(1.3521, 103.8198)` and radius `100_000`, then sorts by ID as before.
+- `async area(north: float, south: float, east: float, west: float) -> list[CarparkAvailability]` preserves bounds validation, enclosing-radius calculation, and inclusive edge filtering.
+- `async get_by_id(carpark_id: str, lat: float | None, lng: float | None) -> CarparkAvailability` dispatches by `owns_id()` and never applies list-only duplicate suppression.
+- `build_default_service() -> CarparkService` wires the existing lookup tables, rates function, and environment LTA key.
 
 - [ ] **Step 1: Write failing service tests**
 
-  Use small fake adapters implementing the protocol to assert HDB-first deduplication, distance ordering, all-carpark center/radius behavior, area filtering, source dispatch by ID prefix, and not-found behavior.
+  Use fake adapters returning `CarparkAvailability` records to assert HDB-first ID priority, distance ordering, LTA-name suppression of supplemental list records, direct supplemental detail resolution despite suppression, all-carpark constants, area inclusive edges, invalid/oversized bounds, and source dispatch/not-found behavior.
 
 - [ ] **Step 2: Run the focused tests and verify they fail**
 
@@ -215,7 +253,7 @@
 
 - [ ] **Step 3: Implement `CarparkService` and `build_default_service()`**
 
-  Keep cross-source coordination here only. Preserve existing source order, sorting, radius constants, and area bounds semantics; do not move source parsing back into the service.
+  Keep source parsing out of the service. The only source-aware aggregation rules are HDB-first ID priority and LTA-versus-supplemental canonical-name suppression for list responses.
 
 - [ ] **Step 4: Run the focused tests and verify they pass**
 
@@ -230,51 +268,50 @@
   git commit -m "refactor: add carpark aggregation service"
   ```
 
-### Task 6: Thin the API layer and add the staging route regression
+### Task 7: Thin the API layer and complete compatibility coverage
 
 **Files:**
 - Modify: `backend/app/api/carparks.py`
 - Modify: `backend/tests/test_map_performance.py`
-- Create: `backend/tests/test_carpark_api.py`
+- Modify: `backend/tests/test_carpark_api.py`
 
 **Interfaces:**
-- Keep `router` and all four endpoint paths unchanged.
-- Instantiate one module-level `service = build_default_service()` and have routes call `service.all()`, `service.nearby(...)`, `service.area(...)`, and `service.get_by_id(...)`.
-- Define the detail route as `@router.get("/carparks/{carpark_id:path}", response_model=CarparkAvailability)` so the public path can contain `/`; keep it after `/all`, `/nearby`, and `/area`.
-- Translate `CarparkSourceError` and `CarparkNotFoundError` into the existing HTTP status/detail responses at this boundary.
-- Keep query validation and response models in the API module; remove source-specific constants, imports, helpers, and fetch/detail implementations from it.
+- Keep `router` and `/all`, `/nearby`, `/area`, and `/carparks/{carpark_id:path}` paths unchanged and in that order.
+- Instantiate one module-level `service = build_default_service()`; routes call `service.all()`, `service.nearby(...)`, `service.area(...)`, and `service.get_by_id(...)`.
+- Translate `CarparkSourceError` and `CarparkNotFoundError` into the existing HTTP status/detail responses.
+- Keep query validation and response models at the API boundary; remove source-specific constants, imports, helpers, and fetch/detail implementations.
 
-- [ ] **Step 1: Write failing API tests**
+- [ ] **Step 1: Extend failing compatibility tests**
 
-  Add a `TestClient` test for the exact slash-containing detail URL with a service stub that returns a supplemental record, asserting HTTP `200` and the unchanged response JSON. Update area tests to patch `carparks_api.service.nearby` rather than deleted module-level source functions. Add a test that invalid bounds return `422` without calling the service.
+  Update area tests to patch `carparks_api.service.nearby` or `service.area` rather than deleted source functions. Add assertions for route order relative to the frontend catch-all, inclusive area edges, unchanged response defaults/source labels/order, and raw/encoded `/parkcastsit` slash URLs using the real service boundary stub.
 
-- [ ] **Step 2: Run the focused tests and verify the route regression fails**
+- [ ] **Step 2: Run the focused API tests and verify failures identify missing service wiring**
 
   Run: `$env:PYTHONPATH='backend'; python -m unittest backend/tests/test_carpark_api.py backend/tests/test_map_performance.py -v`
 
-  Expected: the new slash-ID test fails against the current `{carpark_id}` route or the service wiring is missing.
+  Expected: FAIL until routes are wired to `CarparkService` and errors are translated.
 
 - [ ] **Step 3: Replace the API implementation with thin service-backed routes**
 
-  Preserve endpoint paths, response models, query validation, and error details. Use the path converter for detail IDs and keep the catch-all frontend route from handling valid API detail requests.
+  Preserve route order, validation, response model, error statuses/details, and the path converter from Task 1. Ensure the frontend catch-all remains after the API routes.
 
 - [ ] **Step 4: Run the focused API tests and verify they pass**
 
   Run: `$env:PYTHONPATH='backend'; python -m unittest backend/tests/test_carpark_api.py backend/tests/test_map_performance.py -v`
 
-  Expected: PASS, including the slash-containing supplemental detail case.
+  Expected: PASS.
 
-- [ ] **Step 5: Commit the API refactor and regression coverage**
+- [ ] **Step 5: Commit the API refactor and compatibility coverage**
 
   ```powershell
-  git add -- backend/app/api/carparks.py backend/tests/test_map_performance.py backend/tests/test_carpark_api.py
-  git commit -m "fix: route slash-containing carpark IDs"
+  git add -- backend/app/api/carparks.py backend/tests/test_carpark_api.py backend/tests/test_map_performance.py
+  git commit -m "refactor: route carpark API through source service"
   ```
 
-### Task 7: Run the full verification suite
+### Task 8: Run the complete verification suite
 
 **Files:**
-- No new files; verify all files from Tasks 1–6.
+- No new files; verify all files from Tasks 1–7.
 
 - [ ] **Step 1: Run the complete backend suite**
 
@@ -288,10 +325,10 @@
 
   Expected: all frontend tests pass; no frontend source-specific changes are required.
 
-- [ ] **Step 3: Review the diff and whitespace**
+- [ ] **Step 3: Review the final diff and whitespace**
 
-  Run: `git diff --check` and inspect that `backend/app/api/carparks.py` contains only routing, validation, service calls, and error translation.
+  Run: `git diff --check`. Confirm `backend/app/api/carparks.py` contains only routing, validation, service calls, and error translation; confirm no availability cache or unrelated files were introduced.
 
 - [ ] **Step 4: Confirm the final verification state**
 
-  Expected: `git diff --check` is clean, all backend and frontend tests pass, and no generated artifacts or unrelated files are included in the refactor diff.
+  Expected: raw and encoded staging-path detail tests pass, all compatibility tests pass, and the final diff contains only the approved adapter refactor and route fix.
