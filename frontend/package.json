@@ -6,6 +6,7 @@
     "scripts": {
         "dev": "vite",
         "build": "vite build",
+        "typecheck": "tsc --noEmit",
         "test": "node --import tsx --test src/app/utils/pricingEngine.test.ts src/app/utils/mapViewport.test.ts src/app/utils/carpark-filters.test.ts"
     },
     "dependencies": {
@@ -80,6 +81,7 @@
         "react-dom": "19.2.8",
         "tailwindcss": "4.1.12",
         "tsx": "^4.20.6",
+        "typescript": "^5.9.3",
         "vite": "^6.4.3"
     }
 }
