@@ -2,6 +2,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
@@ -23,6 +24,9 @@ else:
     allowed_origins = ["http://localhost:5173"]
 
 app = FastAPI(title="ParkCast SG API")
+# Funnel forwards the bytes supplied by the origin. Compress both JSON and
+# static assets instead of transferring their full uncompressed payloads.
+app.add_middleware(GZipMiddleware, minimum_size=1000, compresslevel=4)
 
 app_base_path = os.getenv("APP_BASE_PATH", "/").strip()
 if app_base_path and app_base_path != "/":

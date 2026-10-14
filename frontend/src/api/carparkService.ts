@@ -1,6 +1,7 @@
 import type { Carpark, AvailabilityLevel } from '../app/data/carparks'
 import { getNumericLiveCarRate } from '../app/utils/pricingEngine'
 import { API_BASE } from '../app/runtime'
+import type { MapViewport } from '../app/utils/mapViewport'
 
 // ---------------------------------------------------------------------------
 // Raw shape returned by the backend
@@ -45,9 +46,10 @@ export async function getNearbyCarparks(
   lat: number,
   lng: number,
   radius: number,
+  signal?: AbortSignal,
 ): Promise<NearbyCarpark[]> {
   const url = `${API_BASE}/api/v1/carparks/nearby?lat=${lat}&lng=${lng}&radius=${radius}`
-  const res = await fetch(url)
+  const res = await fetch(url, { signal })
   if (!res.ok) {
     throw new Error(`Carpark API error ${res.status}`)
   }
@@ -60,6 +62,13 @@ export async function getAllCarparks(): Promise<NearbyCarpark[]> {
   if (!res.ok) {
     throw new Error(`Carpark API error ${res.status}`)
   }
+  return res.json()
+}
+
+export async function getCarparksInArea(bounds: MapViewport, signal?: AbortSignal): Promise<NearbyCarpark[]> {
+  const query = new URLSearchParams({ north: String(bounds.north), south: String(bounds.south), east: String(bounds.east), west: String(bounds.west) })
+  const res = await fetch(`${API_BASE}/api/v1/carparks/area?${query}`, { signal })
+  if (!res.ok) throw new Error(`Carpark API error ${res.status}`)
   return res.json()
 }
 
@@ -109,6 +118,7 @@ function distanceToWalkingMinutes(distanceMetres: number): number {
 export function transformCarpark(raw: NearbyCarpark): Carpark {
     const isLta = raw.source === 'lta';
     const isSupplemental = raw.source === 'supplemental';
+    const availabilityLevel = crowdToAvailability(raw.crowd_level);
     const cp: Carpark = {
         id: raw.id,
         name: raw.name,
@@ -118,7 +128,7 @@ export function transformCarpark(raw: NearbyCarpark): Carpark {
         availableLots: raw.available_lots,
         totalLots: raw.total_lots,
         lotTypes: raw.lot_types ? raw.lot_types.map((lot) => ({ lotType: lot.lot_type, availableLots: lot.available_lots, totalLots: lot.total_lots })) : [],
-        availabilityLevel: crowdToAvailability(raw.crowd_level),
+        availabilityLevel,
         walkingMinutes: distanceToWalkingMinutes(raw.distance),
 
         // Unknown rates stay at Infinity so "Cheapest" never promotes a
@@ -140,7 +150,7 @@ export function transformCarpark(raw: NearbyCarpark): Carpark {
         isPeak: raw.is_peak,
         availabilityUpdatedAt: raw.availability_timestamp ?? undefined,
         // LTA/supplemental carparks are not marked recommended (unknown availability)
-        isRecommended: !isLta && !isSupplemental && raw.available_lots > 10 && raw.is_sheltered,
+        isRecommended: !isLta && !isSupplemental && availabilityLevel === 'high' && raw.is_sheltered === true,
     };
 
     // Assign accurate live numeric rate for all carparks so they sort correctly

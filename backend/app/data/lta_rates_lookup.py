@@ -19,6 +19,8 @@ import csv
 import re
 from pathlib import Path
 
+from app.carparks.helpers import canonicalise_name
+
 _DATA_DIR = Path(__file__).parent
 _RATES_CSV = _DATA_DIR / "CarparkRates.csv"
 
@@ -34,20 +36,6 @@ def _normalise(name: str) -> str:
 def _strip_parens(name: str) -> str:
     """Remove trailing parenthetical content, e.g. ' (Multi-Storey Car Park)'."""
     return re.sub(r"\s*\(.*\)\s*$", "", name).strip()
-
-
-def canonicalise_name(name: str) -> str:
-    """Return a conservative comparison key for formatting-only differences.
-
-    This handles punctuation, spacing, and the common ``Bt`` abbreviation
-    without using fuzzy matching, which could silently attach the wrong price
-    to a similarly named development.
-    """
-    words = re.findall(r"[a-z0-9]+", name.lower())
-    expanded = ["bukit" if word == "bt" else word for word in words]
-    if expanded and expanded[0] == "the":
-        expanded = expanded[1:]
-    return "".join(expanded)
 
 
 def _load() -> tuple[

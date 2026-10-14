@@ -1,21 +1,21 @@
-import { CloudRain } from 'lucide-react';
+import { CalendarCheck2, CloudRain } from 'lucide-react';
 
 interface FilterChipsProps {
     selectedFilter: 'recommended' | 'cheapest' | 'closest' | 'available';
     rainMode: boolean;
-    freeSundayParking: boolean;
+    freeWeekendMode: boolean;
     onFilterChange: (filter: 'recommended' | 'cheapest' | 'closest' | 'available') => void;
     onRainModeToggle: () => void;
-    onFreeSundayParkingToggle: () => void;
+    onFreeWeekendModeToggle: () => void;
 }
 
 export function FilterChips({
     selectedFilter,
     rainMode,
-    freeSundayParking,
+    freeWeekendMode,
     onFilterChange,
     onRainModeToggle,
-    onFreeSundayParkingToggle,
+    onFreeWeekendModeToggle,
 }: FilterChipsProps) {
     const filters: Array<{
         id: 'recommended' | 'cheapest' | 'closest' | 'available';
@@ -43,24 +43,30 @@ export function FilterChips({
                 </button>
             ))}
 
-            {[
-                { label: 'Rain Mode', active: rainMode, onToggle: onRainModeToggle, icon: <CloudRain className="w-4 h-4" /> },
-                { label: 'Free Sunday/PH', active: freeSundayParking, onToggle: onFreeSundayParkingToggle, title: 'HDB carparks offering free parking on Sundays and public holidays during their stated hours' },
-            ].map((filter) => (
-                <button
-                    key={filter.label}
-                    aria-pressed={filter.active}
-                    title={filter.title}
-                    onClick={filter.onToggle}
-                    className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all flex items-center gap-1.5 ${filter.active
-                        ? 'bg-blue-500 text-white shadow-md'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                        }`}
-                >
-                    {filter.icon}
-                    {filter.label}
-                </button>
-            ))}
+            <button
+                aria-pressed={rainMode}
+                onClick={onRainModeToggle}
+                className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all flex items-center gap-1.5 ${rainMode
+                    ? 'bg-blue-500 text-white shadow-md'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+            >
+                <CloudRain className="w-4 h-4" />
+                Rain Mode
+            </button>
+            <button
+                type="button"
+                aria-pressed={freeWeekendMode}
+                title="HDB carparks offering free parking on Sundays and public holidays during their stated hours"
+                onClick={onFreeWeekendModeToggle}
+                className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all flex items-center gap-1.5 ${freeWeekendMode
+                    ? 'bg-emerald-600 text-white shadow-md'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+            >
+                <CalendarCheck2 className="w-4 h-4" />
+                Free Sun &amp; PH
+            </button>
         </div>
     );
 }
