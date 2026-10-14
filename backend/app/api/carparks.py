@@ -649,7 +649,7 @@ async def get_carparks_in_area(north: float, south: float, east: float, west: fl
     return [cp for cp in candidates if south <= cp.lat <= north and west <= cp.lng <= east]
 
 
-@router.get("/carparks/{carpark_id}", response_model=CarparkAvailability)
+@router.get("/carparks/{carpark_id:path}", response_model=CarparkAvailability)
 async def get_carpark(carpark_id: str, lat: float | None = None, lng: float | None = None):
     """
     Return a single carpark's live availability by ID.
