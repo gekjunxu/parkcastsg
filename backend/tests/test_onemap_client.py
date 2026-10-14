@@ -240,6 +240,28 @@ class OneMapClientTests(unittest.IsolatedAsyncioTestCase):
             await client.search("place")
         self.assertEqual(raised.exception.status_code, 502)
 
+    async def test_bare_http_401_refreshes_without_parsing_the_body(self):
+        auth_calls = 0
+        search_calls = 0
+
+        async def handler(request):
+            nonlocal auth_calls, search_calls
+            if request.url.path.endswith("getToken"):
+                auth_calls += 1
+                return httpx.Response(200, json={
+                    "access_token": f"token-{auth_calls}",
+                    "expiry_timestamp": "1700259200",
+                })
+            search_calls += 1
+            if search_calls == 1:
+                return httpx.Response(401, text="expired")
+            return httpx.Response(200, json={"found": 0, "results": []})
+
+        client, _ = await self.make_client(handler)
+        self.assertEqual(await client.search("place"), [])
+        self.assertEqual(auth_calls, 2)
+        self.assertEqual(search_calls, 2)
+
     async def test_missing_credentials_and_malformed_token_are_safe_failures(self):
         async def handler(request):
             self.fail("missing credentials must not call OneMap")

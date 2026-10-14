@@ -172,6 +172,8 @@ class OneMapClient:
             )
         except (httpx.HTTPError, TimeoutError, asyncio.TimeoutError) as exc:
             raise self._upstream_error("search", "request_failed") from exc
+        if response.status_code == 401:
+            raise _TokenRejected()
         payload = self._json_object(response, "search")
         if self._is_token_rejection(response, payload):
             raise _TokenRejected()
