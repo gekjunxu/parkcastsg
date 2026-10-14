@@ -2,6 +2,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
@@ -23,6 +24,27 @@ else:
     allowed_origins = ["http://localhost:5173"]
 
 app = FastAPI(title="ParkCast SG API")
+# Funnel forwards the bytes supplied by the origin. Compress both JSON and
+# static assets instead of transferring their full uncompressed payloads.
+app.add_middleware(GZipMiddleware, minimum_size=1000, compresslevel=4)
+
+app_base_path = os.getenv("APP_BASE_PATH", "/").strip()
+if app_base_path and app_base_path != "/":
+    app_base_path = "/" + app_base_path.strip("/")
+else:
+    app_base_path = ""
+
+
+@app.middleware("http")
+async def strip_app_base_path(request, call_next):
+    """Accept requests both with and without the public proxy path prefix."""
+    if app_base_path:
+        request_path = request.scope["path"]
+        if request_path == app_base_path or request_path.startswith(app_base_path + "/"):
+            stripped_path = request_path[len(app_base_path):] or "/"
+            request.scope["path"] = stripped_path
+            request.scope["raw_path"] = stripped_path.encode("utf-8")
+    return await call_next(request)
 
 app.add_middleware(
     CORSMiddleware,

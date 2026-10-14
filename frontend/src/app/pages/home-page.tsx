@@ -51,7 +51,7 @@ export function HomePage() {
         <div className='max-w-7xl mx-auto flex items-center justify-between'>
           <div className='flex items-center gap-2'>
             <img
-              src='/favicon.png'
+              src={`${import.meta.env.BASE_URL}favicon.png`}
               alt='ParkCastSG Logo'
               className='w-8 h-8 rounded-lg object-contain'
             />

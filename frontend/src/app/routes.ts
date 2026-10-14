@@ -21,4 +21,8 @@ export const router = createBrowserRouter([
         path: '/carpark/:id',
         Component: CarparkDetailPage,
     },
-]);
+], {
+    basename: import.meta.env.BASE_URL === '/'
+        ? undefined
+        : import.meta.env.BASE_URL.replace(/\/$/, ''),
+});

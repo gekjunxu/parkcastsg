@@ -1,32 +1,56 @@
 # Deploying ParkCastSG to `prodesk`
 
-The `Deploy to prodesk` workflow is a manual, branch-aware deployment. In
-GitHub, open **Actions → Deploy to prodesk → Run workflow**, select the branch
-or tag to test, and optionally provide a deployment name and host port.
+The `Deploy to prodesk` workflow automatically deploys successful push-based CI
+runs for the two persistent environments:
+
+- `main` → deployment `main` at `/parkcast` (production)
+- `staging` → deployment `parkcastsit` at `/parkcastsit` (test/staging)
+
+It also remains manually runnable from **Actions → Deploy to prodesk → Run
+workflow** for feature branches, emergency redeploys, or custom paths.
+Leaving the deployment name and public path blank uses the mapping above.
 
 Each deployment gets its own Compose project and directory under
 `~/parkcastsg-deployments`. Leaving the port as `0` assigns a stable unused port
-in the `18000-18999` range based on the deployment name. This allows `main` and
-several feature branches to run at the same time. Re-running a deployment with
-the same name updates that version in place.
+in the `18000-18999` range based on the deployment name. This allows production,
+staging, and several feature branches to run at the same time. Re-running a
+deployment with the same name updates that version in place.
+
+The workflow also builds the frontend with the selected public path and adds
+that path to the existing Tailscale Funnel on `prodesk`. It deploys only after
+the CI workflow succeeds for a `main` or `staging` push. After a successful
+run, open `https://prodesk.<tailnet>.ts.net/parkcast` or
+`https://prodesk.<tailnet>.ts.net/parkcastsit`. Use a different `public_path`
+for simultaneous public feature-branch versions.
+
+The deployment job names GitHub environments `production` and `staging`. Add
+required reviewers to the `production` environment in **Settings → Environments**
+if production deployments should pause for approval; the CI-success gate still
+applies either way.
 
 ## Required GitHub secrets
 
 Add these repository secrets before running the workflow:
 
-- `TS_AUTHKEY`: a reusable, preferably ephemeral Tailscale auth key allowed to
-  join the Tailnet.
+- `TS_OAUTH_CLIENT_ID` and `TS_OAUTH_SECRET`: a Tailscale OAuth client with
+  writable `auth_keys` scope and permission to use `tag:ci`. The workflow uses
+  this client to create an ephemeral, tagged runner node for each deployment.
 - `PRODESK_SSH_PRIVATE_KEY`: the private key whose public key is in
   `~/.ssh/authorized_keys` for the deployment user on `prodesk`.
-- `PRODESK_KNOWN_HOSTS`: the verified `ssh-keyscan` entry for `prodesk`.
 
 Optional secrets are `PRODESK_USER` (defaults to `junxu`), `PRODESK_HOST`
 (defaults to `prodesk`), `PRODESK_DEPLOYMENT_ROOT` (defaults to
-`parkcastsg-deployments`), `LTA_API_KEY`, and `CORS_ALLOW_ORIGINS`.
+`parkcastsg-deployments`), `PRODESK_KNOWN_HOSTS`, `LTA_API_KEY`, and
+`CORS_ALLOW_ORIGINS`. The verified `PRODESK_KNOWN_HOSTS` value can also be
+stored as a repository variable rather than a secret. If omitted, the workflow
+uses `ssh-keyscan` after joining the Tailnet and emits a warning; pinning the
+verified host key is safer.
 
 The target host must be a Linux Docker host with the Docker Compose plugin. The
 workflow does not expose the service publicly; access it over the Tailnet at
-the URL printed in the workflow log, for example `http://prodesk:18042`.
+the HTTPS URL printed in the workflow log. Tailscale Funnel must already be
+enabled on the host; the workflow adds a path without resetting existing Funnel
+routes.
 
 To remove one test version manually on the server:
 
