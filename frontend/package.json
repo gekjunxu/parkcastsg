@@ -8,7 +8,7 @@
         "build": "vite build",
         "typecheck": "tsc --noEmit",
         "test": "node --import tsx --test src/app/utils/pricingEngine.test.ts src/app/utils/mapViewport.test.ts src/app/utils/carpark-filters.test.ts src/api/geocode.test.ts",
-        "test:component": "vitest run --environment jsdom src/app/components/destination-search.test.ts"
+        "test:component": "vitest run --environment jsdom src/app/components/destination-search.test.tsx"
     },
     "dependencies": {
         "@emotion/react": "11.14.0",
@@ -87,6 +87,6 @@
         "tsx": "^4.23.15",
         "typescript": "^5.9.3",
         "vite": "^8.3.4",
-        "vitest": "^2.1.9"
+        "vitest": "4.1.11"
     }
 }
