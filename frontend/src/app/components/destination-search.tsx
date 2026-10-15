@@ -87,7 +87,7 @@ export function DestinationSearch({
   }, [])
 
   function handleKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
-    if (event.isComposing || composing.current) return
+    if (event.nativeEvent.isComposing || composing.current) return
     if (event.key === 'ArrowDown' && suggestions.length) {
       event.preventDefault()
       setActiveIndex(index => (index + 1) % suggestions.length)
