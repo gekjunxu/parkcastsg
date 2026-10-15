@@ -1,8 +1,15 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DestinationSearch } from './destination-search'
 import type { LocationSuggestion } from '../../api/geocode'
+
+const parkingMapStylesheet = readFileSync(
+  resolve(process.cwd(), 'src/styles/parking-map.css'),
+  'utf8',
+)
 
 const suggestion: LocationSuggestion = {
   label: 'Marina Bay Sands',
@@ -153,4 +160,23 @@ describe('DestinationSearch', () => {
     view.unmount()
     expect(signal?.aborted).toBe(true)
   })
+
+  it('keeps the autocomplete stacking context above the results sheet', () => {
+    const style = document.createElement('style')
+    style.textContent = parkingMapStylesheet
+    document.head.append(style)
+
+    const header = document.createElement('header')
+    header.className = 'parking-header'
+    const results = document.createElement('section')
+    results.className = 'parking-results'
+    document.body.append(header, results)
+
+    const headerZIndex = Number.parseInt(getComputedStyle(header).zIndex, 10)
+    const resultsZIndex = Number.parseInt(getComputedStyle(results).zIndex, 10)
+
+    expect(headerZIndex).toBeGreaterThan(resultsZIndex)
+    style.remove()
+  })
 })
+

@@ -2,7 +2,7 @@
 .parking-shell button { cursor: pointer; }
 .parking-shell button:disabled { opacity: .5; cursor: wait; }
 .parking-shell button:focus-visible, .parking-shell input:focus-visible { outline: 3px solid #2563eb; outline-offset: 2px; }
-.parking-header { flex: none; background: white; border-bottom: 1px solid #e2e8f0; padding: max(10px, env(safe-area-inset-top)) 14px 10px; z-index: 30; }
+.parking-header { flex: none; background: white; border-bottom: 1px solid #e2e8f0; padding: max(10px, env(safe-area-inset-top)) 14px 10px; z-index: 800; }
 .parking-search { display: flex; align-items: center; gap: 8px; max-width: 850px; }
 .parking-icon-button { flex: none; width: 44px; height: 44px; display: inline-flex; align-items: center; justify-content: center; border-radius: 12px; color: #52627a; }
 .parking-icon-button:hover { background: #eff4fa; }
@@ -95,3 +95,4 @@
   .parking-map-hint { display: none; }
   .parking-results { max-height: 55%; }
 }
+
