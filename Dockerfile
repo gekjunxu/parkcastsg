@@ -1,7 +1,7 @@
 FROM node:22-alpine AS frontend-build
 
 WORKDIR /build/frontend
-COPY frontend/package.json frontend/package-lock.json ./
+COPY frontend/package.json frontend/package-lock.json frontend/.npmrc ./
 RUN npm ci
 COPY frontend/ ./
 ARG VITE_API_BASE_URL=
