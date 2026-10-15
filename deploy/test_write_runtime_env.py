@@ -18,6 +18,21 @@ write_runtime_env = _MODULE.write_runtime_env
 
 
 class RuntimeEnvTests(unittest.TestCase):
+    def test_rejects_missing_onemap_credentials(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaisesRegex(ValueError, "ONEMAP_API_EMAIL.*ONEMAP_API_PASSWORD"):
+                write_runtime_env(
+                    Path(directory) / ".env",
+                    port="0",
+                    app_base_path="/parkcastsit",
+                    vite_base_path="/parkcastsit/",
+                    environment={
+                        **os.environ,
+                        "ONEMAP_API_EMAIL": "",
+                        "ONEMAP_API_PASSWORD": "",
+                    },
+                )
+
     def test_special_characters_round_trip_and_file_is_private(self):
         values = {
             "LTA_API_KEY": "lta-$-key#\\path",
@@ -88,3 +103,4 @@ class RuntimeEnvTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
