@@ -49,6 +49,8 @@ jobs:
       PRODESK_DEPLOYMENT_ROOT: ${{ secrets.PRODESK_DEPLOYMENT_ROOT || 'parkcastsg-deployments' }}
       LTA_API_KEY: ${{ secrets.LTA_API_KEY }}
       CORS_ALLOW_ORIGINS: ${{ secrets.CORS_ALLOW_ORIGINS }}
+      ONEMAP_API_EMAIL: ${{ secrets.ONEMAP_API_EMAIL }}
+      ONEMAP_API_PASSWORD: ${{ secrets.ONEMAP_API_PASSWORD }}
     steps:
       - name: Check out selected branch
         uses: actions/checkout@v5
@@ -133,15 +135,12 @@ jobs:
           remote_dir="$PRODESK_DEPLOYMENT_ROOT/$slug"
           ssh "$remote" "mkdir -p '$remote_dir'"
           scp "$RUNNER_TEMP/parkcast-source.tgz" "$remote:$remote_dir/source.tgz"
-          {
-            printf 'PARKCAST_PORT=%s\n' "${DEPLOYMENT_PORT:-0}"
-            printf 'ENVIRONMENT=production\n'
-            printf 'APP_BASE_PATH=%s\n' "$public_path"
-            printf 'VITE_BASE_PATH=%s/\n' "$public_path"
-            printf 'LTA_API_KEY=%s\n' "$LTA_API_KEY"
-            printf 'CORS_ALLOW_ORIGINS=%s\n' "$CORS_ALLOW_ORIGINS"
-          } > "$RUNNER_TEMP/parkcast.env"
+          python3 deploy/write-runtime-env.py "$RUNNER_TEMP/parkcast.env" \
+            --port "${DEPLOYMENT_PORT:-0}" \
+            --app-base-path "$public_path" \
+            --vite-base-path "$public_path/"
           scp "$RUNNER_TEMP/parkcast.env" "$remote:$remote_dir/.env"
+          ssh "$remote" "chmod 600 '$remote_dir/.env'"
 
       - name: Build and start isolated Compose project
         shell: bash

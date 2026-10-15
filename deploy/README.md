@@ -38,6 +38,18 @@ Add these repository secrets before running the workflow:
 - `PRODESK_SSH_PRIVATE_KEY`: the private key whose public key is in
   `~/.ssh/authorized_keys` for the deployment user on `prodesk`.
 
+For staging destination autocomplete, add these secrets to the GitHub
+`staging` environment:
+
+- `ONEMAP_API_EMAIL`: the email used for the registered OneMap account.
+- `ONEMAP_API_PASSWORD`: the OneMap account password.
+
+The workflow keeps these values server-side and forwards them to the backend
+container only. ParkCast keeps the OneMap access token in process memory and
+requests a replacement automatically within five minutes of the returned
+three-day expiry, including after an idle period. Do not put the account
+credentials or access token in source control, frontend variables, or chat.
+
 Optional secrets are `PRODESK_USER` (defaults to `junxu`), `PRODESK_HOST`
 (defaults to `prodesk`), `PRODESK_DEPLOYMENT_ROOT` (defaults to
 `parkcastsg-deployments`), `PRODESK_KNOWN_HOSTS`, `LTA_API_KEY`, and

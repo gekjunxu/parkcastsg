@@ -1,0 +1,6 @@
+.destination-search { position: relative; flex: 1; min-width: 0; }
+.destination-search-list { position: absolute; z-index: 80; top: calc(100% + 6px); left: 0; right: 0; margin: 0; padding: 6px; background: white; border: 1px solid #dbe4f0; border-radius: 12px; box-shadow: 0 8px 24px #203b5c26; list-style: none; }
+.destination-search-list li { display: grid; gap: 2px; padding: 10px 12px; border-radius: 8px; cursor: pointer; }
+.destination-search-list li:hover, .destination-search-list li[aria-selected=true] { background: #eff6ff; }
+.destination-search-list strong { color: #17243b; font-size: 13px; font-weight: 650; }
+.destination-search-list span { color: #64748b; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

@@ -1,5 +1,7 @@
+from contextlib import asynccontextmanager
 from pathlib import Path
 
+import httpx
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.gzip import GZipMiddleware
@@ -11,7 +13,8 @@ import os
 # Load .env once here, before any module reads env vars
 load_dotenv()
 
-from app.api import carparks, weather
+from app.api import carparks, locations, weather
+from app.locations.onemap import OneMapClient
 
 cors_allow_origins_env = os.getenv("CORS_ALLOW_ORIGINS")
 if cors_allow_origins_env:
@@ -23,7 +26,21 @@ if cors_allow_origins_env:
 else:
     allowed_origins = ["http://localhost:5173"]
 
-app = FastAPI(title="ParkCast SG API")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    http = httpx.AsyncClient(headers={"User-Agent": "ParkCastSG/1.0"})
+    app.state.onemap_client = OneMapClient(
+        os.getenv("ONEMAP_API_EMAIL"),
+        os.getenv("ONEMAP_API_PASSWORD"),
+        http=http,
+    )
+    try:
+        yield
+    finally:
+        await http.aclose()
+
+
+app = FastAPI(title="ParkCast SG API", lifespan=lifespan)
 # Funnel forwards the bytes supplied by the origin. Compress both JSON and
 # static assets instead of transferring their full uncompressed payloads.
 app.add_middleware(GZipMiddleware, minimum_size=1000, compresslevel=4)
@@ -61,6 +78,7 @@ def health_check():
 
 
 app.include_router(carparks.router, prefix="/api/v1")
+app.include_router(locations.router, prefix="/api/v1")
 app.include_router(weather.router, prefix="/api/v1")
 
 
