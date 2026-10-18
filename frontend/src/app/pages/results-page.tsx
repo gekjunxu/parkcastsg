@@ -23,6 +23,8 @@ const PAGE_SIZE = 30
 const shelteredFilter = new ShelteredCarparkFilter()
 const freeWeekendFilter = new FreeSundayPublicHolidayCarparkFilter()
 type ViewMemory = { viewport: MapViewport | null; selected: string | null; listOpen: boolean; sort: 'recommended' | 'cheapest' | 'closest' | 'available'; rainMode: boolean; freeWeekendMode: boolean }
+type SheetDrag = { top: number; height: number }
+type SheetPointerStart = { pointerId: number; startY: number; height: number; workspaceHeight: number; moved: boolean }
 const savedViews = new Map<string, ViewMemory>()
 // Reuse the island-wide response across detail/back navigation. Nearby searches
 // never pay this network or marker cost. Explicit refresh bypasses this cache.
@@ -78,7 +80,10 @@ export function ResultsPage() {
   const [locationError, setLocationError] = useState<string | null>(null)
   const [weather, setWeather] = useState<WeatherData | null>(null)
   const [navigationOpen, setNavigationOpen] = useState(false)
-  const swipeStart = useRef<number | null>(null)
+  const [sheetDrag, setSheetDrag] = useState<SheetDrag | null>(null)
+  const [sheetDragging, setSheetDragging] = useState(false)
+  const sheetPointerStart = useRef<SheetPointerStart | null>(null)
+  const ignoreSheetClick = useRef(false)
   const listRef = useRef<HTMLDivElement>(null)
   const requestId = useRef(0)
   const focusedSearch = useRef(saved ? `${browsing ? 'map' : 'search'}:${queryKey}` : '')
@@ -142,6 +147,58 @@ export function ResultsPage() {
   useEffect(() => { if (!loading && selected && !chosen) setSelected(null) }, [loading, selected, chosen])
   const onPinClick = useCallback((id: string) => { setSelected(id); setListOpen(false) }, [])
   const onMapMoved = useCallback(() => setMoved(true), [])
+
+  function handleSheetPointerDown(event: React.PointerEvent<HTMLButtonElement>) {
+    if (!event.isPrimary || (event.pointerType === 'mouse' && event.button !== 0)) return
+    const sheet = event.currentTarget.closest<HTMLElement>('.parking-results')
+    const workspace = sheet?.parentElement
+    if (!sheet || !workspace) return
+
+    const sheetRect = sheet.getBoundingClientRect()
+    const workspaceRect = workspace.getBoundingClientRect()
+    const top = Math.max(0, sheetRect.top - workspaceRect.top)
+    const height = sheetRect.height
+    const workspaceHeight = workspaceRect.height
+
+    sheetPointerStart.current = {
+      pointerId: event.pointerId,
+      startY: event.clientY,
+      height,
+      workspaceHeight,
+      moved: false,
+    }
+    event.currentTarget.setPointerCapture(event.pointerId)
+    setSheetDrag({ top, height })
+    setSheetDragging(true)
+  }
+
+  function handleSheetPointerMove(event: React.PointerEvent<HTMLButtonElement>) {
+    const start = sheetPointerStart.current
+    if (!start || start.pointerId !== event.pointerId) return
+
+    const delta = event.clientY - start.startY
+    if (Math.abs(delta) > 5) start.moved = true
+
+    const minHeight = Math.min(96, start.workspaceHeight)
+    const height = Math.max(minHeight, Math.min(start.workspaceHeight, start.height - delta))
+    setSheetDrag({ top: start.workspaceHeight - height, height })
+  }
+
+  function finishSheetPointer(event: React.PointerEvent<HTMLButtonElement>, cancelled = false) {
+    const start = sheetPointerStart.current
+    if (!start || start.pointerId !== event.pointerId) return
+
+    const delta = event.clientY - start.startY
+    if (!cancelled && (start.moved || Math.abs(delta) > 5)) {
+      ignoreSheetClick.current = true
+      requestAnimationFrame(() => { ignoreSheetClick.current = false })
+    }
+    if (!cancelled && Math.abs(delta) > 25) setListOpen(delta < 0)
+
+    sheetPointerStart.current = null
+    setSheetDrag(null)
+    setSheetDragging(false)
+  }
 
   function submitSearch() {
     if (!query.trim()) return
@@ -228,11 +285,31 @@ export function ResultsPage() {
         {loading && <div className="parking-map-status" role="status"><RefreshCw size={16} className="animate-spin" />Loading carparks…</div>}
       </div>
 
-      <section className="parking-results" aria-label="Carpark results">
-        <div className="parking-sheet-handle" onPointerDown={e => { swipeStart.current = e.clientY; e.currentTarget.setPointerCapture(e.pointerId) }} onPointerUp={e => {
-          if (swipeStart.current !== null && Math.abs(e.clientY - swipeStart.current) > 25) setListOpen(e.clientY < swipeStart.current)
-          swipeStart.current = null
-        }}><button aria-label={listOpen ? 'Collapse carpark list' : 'Expand carpark list'} onClick={() => setListOpen(!listOpen)}><span /></button></div>
+      <section
+        className={`parking-results${sheetDragging ? ' is-sheet-dragging' : ''}`}
+        style={sheetDrag ? {
+          top: `${sheetDrag.top}px`,
+          bottom: 0,
+          height: `${sheetDrag.height}px`,
+          maxHeight: 'none',
+        } : undefined}
+        aria-label="Carpark results"
+      >
+        <div className="parking-sheet-handle"><button
+          aria-label={listOpen ? 'Collapse carpark list' : 'Expand carpark list'}
+          onPointerDown={handleSheetPointerDown}
+          onPointerMove={handleSheetPointerMove}
+          onPointerUp={event => finishSheetPointer(event)}
+          onPointerCancel={event => finishSheetPointer(event, true)}
+          onClick={event => {
+            if (ignoreSheetClick.current) {
+              ignoreSheetClick.current = false
+              event.preventDefault()
+              return
+            }
+            setListOpen(!listOpen)
+          }}
+        ><span /></button></div>
         <div className="parking-results-heading">
           <div aria-live="polite"><h1>{loading ? 'Finding parking…' : error ? 'Unable to load carparks' : `${results.length} carparks`}</h1><p>{subtitle}</p></div>
           <button className="parking-icon-button" aria-label="Refresh availability" disabled={loading} onClick={() => setRefresh(v => v + 1)}><RefreshCw size={18} className={loading ? 'animate-spin' : ''} /></button>
