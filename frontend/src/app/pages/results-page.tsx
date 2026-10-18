@@ -193,7 +193,15 @@ export function ResultsPage() {
       ignoreSheetClick.current = true
       requestAnimationFrame(() => { ignoreSheetClick.current = false })
     }
-    if (!cancelled && Math.abs(delta) > 25) setListOpen(delta < 0)
+    if (!cancelled && Math.abs(delta) > 25) {
+      if (delta < 0) {
+        setListOpen(true)
+      } else if (listOpen) {
+        setListOpen(false)
+      } else if (selected) {
+        setSelected(null)
+      }
+    }
 
     sheetPointerStart.current = null
     setSheetDrag(null)
