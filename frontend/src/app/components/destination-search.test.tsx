@@ -111,6 +111,25 @@ describe('DestinationSearch', () => {
     expect(onSubmit).toHaveBeenCalledTimes(1)
   })
 
+  it('clears a non-empty search with an X button and keeps the input focused', () => {
+    render(
+      <ControlledSearch
+        initialValue="marina"
+        onSelect={vi.fn()}
+        onSubmit={vi.fn()}
+      />
+    )
+    const input = screen.getByRole('combobox')
+    input.focus()
+
+    const clearButton = screen.getByRole('button', { name: 'Clear search' })
+    fireEvent.mouseDown(clearButton)
+    fireEvent.click(clearButton)
+
+    expect(input).toHaveProperty('value', '')
+    expect(document.activeElement).toBe(input)
+    expect(screen.queryByRole('button', { name: 'Clear search' })).toBeNull()
+  })
   it('ignores a late response from an older query and aborts on unmount', async () => {
     const pending: Array<(response: Response) => void> = []
     const fetchMock = vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
