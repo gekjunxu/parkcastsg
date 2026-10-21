@@ -12,6 +12,10 @@ RUNTIME_VARIABLES = (
     "ONEMAP_API_EMAIL",
     "ONEMAP_API_PASSWORD",
 )
+REQUIRED_RUNTIME_VARIABLES = (
+    "ONEMAP_API_EMAIL",
+    "ONEMAP_API_PASSWORD",
+)
 
 
 def quote_dotenv_value(value: str) -> str:
@@ -30,12 +34,19 @@ def write_runtime_env(
     environment: Mapping[str, str] | None = None,
 ) -> None:
     source = os.environ if environment is None else environment
+    runtime_values = {name: source.get(name, "") for name in RUNTIME_VARIABLES}
+    missing = [name for name in REQUIRED_RUNTIME_VARIABLES if not runtime_values[name]]
+    if missing:
+        raise ValueError(
+            "required runtime environment values are empty: " + ", ".join(missing)
+        )
+
     values = {
         "PARKCAST_PORT": port,
         "ENVIRONMENT": "production",
         "APP_BASE_PATH": app_base_path,
         "VITE_BASE_PATH": vite_base_path,
-        **{name: source.get(name, "") for name in RUNTIME_VARIABLES},
+        **runtime_values,
     }
     content = "".join(f"{name}={quote_dotenv_value(value)}\n" for name, value in values.items())
 
@@ -71,3 +82,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
