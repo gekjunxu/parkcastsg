@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react'
+import { X } from 'lucide-react'
 import { suggestLocations, type LocationSuggestion } from '../../api/geocode'
 import '../../styles/destination-search.css'
 
@@ -32,6 +33,7 @@ export function DestinationSearch({
   const generation = useRef(0)
   const composing = useRef(false)
   const blurTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
 
   function cancelPending() {
     generation.current += 1
@@ -45,6 +47,12 @@ export function DestinationSearch({
     cancelPending()
     setSuggestions([])
     setActiveIndex(-1)
+  }
+
+  function clearSearch() {
+    onChange('')
+    closeSuggestions()
+    inputRef.current?.focus()
   }
 
   function selectSuggestion(suggestion: LocationSuggestion) {
@@ -114,7 +122,8 @@ export function DestinationSearch({
   return (
     <div className="destination-search">
       <input
-        className={className}
+        ref={inputRef}
+        className={[className, value ? 'destination-search-input-with-clear' : ''].filter(Boolean).join(' ')}
         type="text"
         role="combobox"
         aria-label={inputLabel}
@@ -140,6 +149,13 @@ export function DestinationSearch({
         onCompositionEnd={() => { composing.current = false }}
         enterKeyHint="search"
       />
+      {value && <button
+        type="button"
+        className="destination-search-clear"
+        aria-label="Clear search"
+        onMouseDown={event => event.preventDefault()}
+        onClick={clearSearch}
+      ><X size={16} aria-hidden="true" /></button>}
       {suggestions.length > 0 && (
         <ul id={listId} className="destination-search-list" role="listbox">
           {suggestions.map((suggestion, index) => (
