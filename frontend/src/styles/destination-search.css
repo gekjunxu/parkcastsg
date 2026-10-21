@@ -1,4 +1,7 @@
 .destination-search { position: relative; flex: 1; min-width: 0; }
+.destination-search-input-with-clear { padding-right: 40px; }
+.destination-search-clear { position: absolute; top: 50%; right: 4px; width: 32px; height: 32px; display: grid; place-items: center; transform: translateY(-50%); border-radius: 50%; color: #64748b; }
+.destination-search-clear:hover { background: #e2e8f0; color: #17243b; }
 .destination-search-list { position: absolute; z-index: 80; top: calc(100% + 6px); left: 0; right: 0; margin: 0; padding: 6px; background: white; border: 1px solid #dbe4f0; border-radius: 12px; box-shadow: 0 8px 24px #203b5c26; list-style: none; }
 .destination-search-list li { display: grid; gap: 2px; padding: 10px 12px; border-radius: 8px; cursor: pointer; }
 .destination-search-list li:hover, .destination-search-list li[aria-selected=true] { background: #eff6ff; }
