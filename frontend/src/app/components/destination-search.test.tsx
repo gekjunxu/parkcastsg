@@ -270,7 +270,7 @@ describe('DestinationSearch', () => {
 
   it('gives the home location action hover, pressed, and keyboard feedback', () => {
     const locationButton = homePageSource.match(
-      /<button[\\s\\S]*?onClick=\\{handleUseLocation\\}[\\s\\S]*?className='([^']+)'/,
+      /<button[\s\S]*?onClick=\{handleUseLocation\}[\s\S]*?className='([^']+)'/,
     )?.[1]
 
     expect(locationButton).toContain('hover:bg-blue-50')
