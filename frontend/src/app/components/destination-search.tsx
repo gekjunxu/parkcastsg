@@ -5,6 +5,8 @@ import '../../styles/destination-search.css'
 
 const DEBOUNCE_MS = 250
 
+export type DestinationSearchVariant = 'embedded' | 'standalone'
+
 export interface DestinationSearchProps {
   value: string
   onChange: (value: string) => void
@@ -13,6 +15,7 @@ export interface DestinationSearchProps {
   inputLabel: string
   placeholder: string
   className?: string
+  variant?: DestinationSearchVariant
 }
 
 export function DestinationSearch({
@@ -23,6 +26,7 @@ export function DestinationSearch({
   inputLabel,
   placeholder,
   className = '',
+  variant = 'embedded',
 }: DestinationSearchProps) {
   const listId = useId()
   const [focused, setFocused] = useState(false)
@@ -123,7 +127,7 @@ export function DestinationSearch({
     <div className="destination-search">
       <input
         ref={inputRef}
-        className={['destination-search-input', className, value ? 'destination-search-input-with-clear' : ''].filter(Boolean).join(' ')}
+        className={['destination-search-input', `destination-search-input--${variant}`, className, value ? 'destination-search-input-with-clear' : ''].filter(Boolean).join(' ')}
         type="text"
         role="combobox"
         aria-label={inputLabel}

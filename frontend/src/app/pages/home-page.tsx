@@ -103,7 +103,8 @@ export function HomePage() {
               onSubmit={handleSearch}
               inputLabel='Destination or postal code'
               placeholder='Enter destination or postal code'
-              className='w-full pl-10 pr-4 py-6 text-base border-gray-300 rounded-lg'
+              variant='standalone'
+              className='w-full pl-10 pr-4 py-6 text-base rounded-lg'
             />
           </div>
 

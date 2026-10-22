@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { DestinationSearch } from './destination-search'
+import { DestinationSearch, type DestinationSearchVariant } from './destination-search'
 import type { LocationSuggestion } from '../../api/geocode'
 
 const parkingMapStylesheet = readFileSync(
@@ -12,6 +12,11 @@ const parkingMapStylesheet = readFileSync(
 )
 const destinationSearchStylesheet = readFileSync(
   resolve(process.cwd(), 'src/styles/destination-search.css'),
+  'utf8',
+)
+
+const homePageSource = readFileSync(
+  resolve(process.cwd(), 'src/app/pages/home-page.tsx'),
   'utf8',
 )
 
@@ -34,10 +39,12 @@ function ControlledSearch({
   initialValue = '',
   onSelect,
   onSubmit,
+  variant,
 }: {
   initialValue?: string
   onSelect: (suggestion: LocationSuggestion) => void
   onSubmit: () => void
+  variant?: DestinationSearchVariant
 }) {
   const [value, setValue] = useState(initialValue)
   return (
@@ -48,6 +55,8 @@ function ControlledSearch({
       onSubmit={onSubmit}
       inputLabel="Destination"
       placeholder="Search"
+
+      variant={variant}
     />
   )
 }
@@ -150,6 +159,25 @@ describe('DestinationSearch', () => {
     )
     expect(destinationSearchStylesheet).toMatch(
       /\.parking-shell\s+input\.destination-search-input:focus-visible\s*\{[^}]*outline:\s*none;[^}]*outline-offset:\s*0;[^}]*box-shadow:\s*none;/s,
+    )
+  })
+
+  it('supports a reusable standalone variant for bordered form fields', () => {
+    render(
+      <ControlledSearch
+        variant="standalone"
+        onSelect={vi.fn()}
+        onSubmit={vi.fn()}
+      />,
+    )
+    const input = screen.getByRole('combobox')
+
+    expect(input.className).toContain('destination-search-input--standalone')
+    expect(destinationSearchStylesheet).toMatch(
+      /\.destination-search-input--standalone\s*\{[^}]*border:\s*1px\s+solid\s+#d1d5db;[^}]*border-radius:\s*8px;/s,
+    )
+    expect(homePageSource).toMatch(
+      /<DestinationSearch[\s\S]*variant='standalone'[\s\S]*className='w-full pl-10 pr-4 py-6 text-base rounded-lg'/s,
     )
   })
 
