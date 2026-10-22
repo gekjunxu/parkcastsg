@@ -1,4 +1,6 @@
 .destination-search { position: relative; flex: 1; min-width: 0; }
+.destination-search-leading-icon { position: absolute; z-index: 1; left: 12px; top: 50%; display: flex; transform: translateY(-50%); color: #9ca3af; pointer-events: none; }
+.destination-search--with-leading-icon .destination-search-input { padding-left: 40px; }
 .parking-search-input:focus-within { outline: 3px solid #2563eb; outline-offset: 2px; }
 .parking-shell input.destination-search-input:focus-visible { outline: none; outline-offset: 0; box-shadow: none; }
 .destination-search-input-with-clear { padding-right: 40px; }

@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react'
+import type { ReactNode } from 'react'
 import { X } from 'lucide-react'
 import { suggestLocations, type LocationSuggestion } from '../../api/geocode'
 import { Input, type InputAppearance } from './ui/input'
@@ -21,6 +22,7 @@ export interface DestinationSearchProps {
   inputLabel: string
   placeholder: string
   className?: string
+  leadingIcon?: ReactNode
   variant?: DestinationSearchVariant
 }
 
@@ -32,6 +34,7 @@ export function DestinationSearch({
   inputLabel,
   placeholder,
   className = '',
+  leadingIcon,
   variant = 'embedded',
 }: DestinationSearchProps) {
   const listId = useId()
@@ -130,7 +133,8 @@ export function DestinationSearch({
   }
 
   return (
-    <div className="destination-search">
+    <div className={leadingIcon ? 'destination-search destination-search--with-leading-icon' : 'destination-search'}>
+      {leadingIcon && <span className="destination-search-leading-icon" aria-hidden="true">{leadingIcon}</span>}
       <Input
         ref={inputRef}
         appearance={inputAppearanceByVariant[variant]}

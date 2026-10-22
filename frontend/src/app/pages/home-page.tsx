@@ -92,21 +92,17 @@ export function HomePage() {
         {/* Search Section */}
         <div className='bg-white rounded-[12px] shadow-lg p-6 space-y-6'>
           {/* Search Bar */}
-          <div className='relative'>
-            <div className='absolute left-3 top-1/2 -translate-y-1/2 text-gray-400'>
-              <MapPin className='w-5 h-5' />
-            </div>
-            <DestinationSearch
-              value={searchQuery}
-              onChange={setSearchQuery}
-              onSelect={handleDestinationSelect}
-              onSubmit={handleSearch}
-              inputLabel='Destination or postal code'
-              placeholder='Enter destination or postal code'
-              variant='standalone'
-              className='w-full pl-10 pr-4 py-6 text-base rounded-lg'
-            />
-          </div>
+          <DestinationSearch
+            value={searchQuery}
+            onChange={setSearchQuery}
+            onSelect={handleDestinationSelect}
+            onSubmit={handleSearch}
+            inputLabel='Destination or postal code'
+            placeholder='Enter destination or postal code'
+            leadingIcon={<MapPin className='w-5 h-5' aria-hidden='true' />}
+            variant='standalone'
+            className='w-full pr-4 py-6 text-base rounded-lg'
+          />
 
           {/* Use Location Button */}
           <div className='space-y-1'>

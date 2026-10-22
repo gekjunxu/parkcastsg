@@ -2,6 +2,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { useState } from 'react'
+import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DestinationSearch, type DestinationSearchVariant } from './destination-search'
 import type { LocationSuggestion } from '../../api/geocode'
@@ -39,11 +40,13 @@ function ControlledSearch({
   initialValue = '',
   onSelect,
   onSubmit,
+  leadingIcon,
   variant,
 }: {
   initialValue?: string
   onSelect: (suggestion: LocationSuggestion) => void
   onSubmit: () => void
+  leadingIcon?: ReactNode
   variant?: DestinationSearchVariant
 }) {
   const [value, setValue] = useState(initialValue)
@@ -55,7 +58,7 @@ function ControlledSearch({
       onSubmit={onSubmit}
       inputLabel="Destination"
       placeholder="Search"
-
+      leadingIcon={leadingIcon}
       variant={variant}
     />
   )
@@ -189,7 +192,29 @@ describe('DestinationSearch', () => {
     expect(embeddedInput.className).toContain('focus-visible:ring-0')
     expect(destinationSearchStylesheet).not.toMatch(/\.destination-search-input--standalone\s*\{/)
     expect(homePageSource).toMatch(
-      /<DestinationSearch[\s\S]*variant='standalone'[\s\S]*className='w-full pl-10 pr-4 py-6 text-base rounded-lg'/s,
+      /<DestinationSearch[\s\S]*variant='standalone'[\s\S]*className='w-full pr-4 py-6 text-base rounded-lg'/s,
+    )
+  })
+
+
+  it('keeps leading icons inside the reusable destination field', () => {
+    render(
+      <ControlledSearch
+        leadingIcon={<span data-testid="leading-icon" />}
+        onSelect={vi.fn()}
+        onSubmit={vi.fn()}
+      />,
+    )
+    const input = screen.getByRole('combobox')
+    const field = input.closest('.destination-search')
+
+    expect(screen.getByTestId('leading-icon')).toBeTruthy()
+    expect(field?.className).toContain('destination-search--with-leading-icon')
+    expect(destinationSearchStylesheet).toMatch(
+      /\.destination-search-leading-icon\s*\{[^}]*pointer-events:\s*none;/s,
+    )
+    expect(homePageSource).toMatch(
+      /<DestinationSearch[\s\S]*leadingIcon=\{<MapPin[\s\S]*variant='standalone'[\s\S]*className='w-full pr-4 py-6 text-base rounded-lg'/s,
     )
   })
 
