@@ -1,4 +1,6 @@
 .destination-search { position: relative; flex: 1; min-width: 0; }
+.destination-search-input { outline: none; }
+.destination-search-input:focus { outline: none; box-shadow: 0 0 0 3px rgb(37 99 235 / 22%); }
 .destination-search-input-with-clear { padding-right: 40px; }
 .destination-search-clear { position: absolute; top: 50%; right: 4px; width: 32px; height: 32px; display: grid; place-items: center; transform: translateY(-50%); border-radius: 50%; color: #64748b; }
 .destination-search-clear:hover { background: #e2e8f0; color: #17243b; }
@@ -7,3 +9,4 @@
 .destination-search-list li:hover, .destination-search-list li[aria-selected=true] { background: #eff6ff; }
 .destination-search-list strong { color: #17243b; font-size: 13px; font-weight: 650; }
 .destination-search-list span { color: #64748b; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+

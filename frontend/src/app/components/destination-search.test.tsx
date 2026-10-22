@@ -10,6 +10,10 @@ const parkingMapStylesheet = readFileSync(
   resolve(process.cwd(), 'src/styles/parking-map.css'),
   'utf8',
 )
+const destinationSearchStylesheet = readFileSync(
+  resolve(process.cwd(), 'src/styles/destination-search.css'),
+  'utf8',
+)
 
 const suggestion: LocationSuggestion = {
   label: 'Marina Bay Sands',
@@ -130,6 +134,22 @@ describe('DestinationSearch', () => {
     expect(document.activeElement).toBe(input)
     expect(screen.queryByRole('button', { name: 'Clear search' })).toBeNull()
   })
+
+  it('uses a rounded focus ring instead of the global rectangular outline', () => {
+    render(
+      <ControlledSearch
+        onSelect={vi.fn()}
+        onSubmit={vi.fn()}
+      />,
+    )
+    const input = screen.getByRole('combobox')
+
+    expect(input.className).toContain('destination-search-input')
+    expect(destinationSearchStylesheet).toMatch(
+      /\.destination-search-input:focus\s*\{[^}]*outline:\s*none;[^}]*box-shadow:/s,
+    )
+  })
+
   it('ignores a late response from an older query and aborts on unmount', async () => {
     const pending: Array<(response: Response) => void> = []
     const fetchMock = vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
@@ -198,4 +218,5 @@ describe('DestinationSearch', () => {
     style.remove()
   })
 })
+
 

@@ -123,7 +123,7 @@ export function DestinationSearch({
     <div className="destination-search">
       <input
         ref={inputRef}
-        className={[className, value ? 'destination-search-input-with-clear' : ''].filter(Boolean).join(' ')}
+        className={['destination-search-input', className, value ? 'destination-search-input-with-clear' : ''].filter(Boolean).join(' ')}
         type="text"
         role="combobox"
         aria-label={inputLabel}
@@ -178,3 +178,4 @@ export function DestinationSearch({
     </div>
   )
 }
+
