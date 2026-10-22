@@ -146,7 +146,10 @@ describe('DestinationSearch', () => {
 
     expect(input.className).toContain('destination-search-input')
     expect(destinationSearchStylesheet).toMatch(
-      /\.destination-search-input:focus\s*\{[^}]*outline:\s*none;[^}]*box-shadow:/s,
+      /\.parking-search-input:focus-within\s*\{[^}]*outline:\s*3px\s+solid\s+#2563eb;[^}]*outline-offset:\s*2px;/s,
+    )
+    expect(destinationSearchStylesheet).toMatch(
+      /\.parking-shell\s+input\.destination-search-input:focus-visible\s*\{[^}]*outline:\s*none;[^}]*outline-offset:\s*0;[^}]*box-shadow:\s*none;/s,
     )
   })
 
