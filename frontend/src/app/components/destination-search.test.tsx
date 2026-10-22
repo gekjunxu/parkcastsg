@@ -268,6 +268,17 @@ describe('DestinationSearch', () => {
     expect(signal?.aborted).toBe(true)
   })
 
+  it('gives the home location action hover, pressed, and keyboard feedback', () => {
+    const locationButton = homePageSource.match(
+      /<button[\\s\\S]*?onClick=\\{handleUseLocation\\}[\\s\\S]*?className='([^']+)'/,
+    )?.[1]
+
+    expect(locationButton).toContain('hover:bg-blue-50')
+    expect(locationButton).toContain('active:bg-blue-100')
+    expect(locationButton).toContain('focus-visible:ring-2')
+    expect(locationButton).toContain('cursor-pointer')
+  })
+
   it('keeps the autocomplete stacking context above the results sheet', () => {
     const style = document.createElement('style')
     style.textContent = parkingMapStylesheet

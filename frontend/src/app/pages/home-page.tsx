@@ -109,7 +109,7 @@ export function HomePage() {
             <button
               onClick={handleUseLocation}
               disabled={locationLoading}
-              className='flex items-center gap-2 text-[#1A56DB] hover:text-[#1444b8] transition-colors disabled:opacity-60 disabled:cursor-not-allowed'
+              className='flex items-center gap-2 rounded-md px-2 py-1.5 text-[#1A56DB] hover:bg-blue-50 hover:text-[#1444b8] active:bg-blue-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1A56DB] focus-visible:ring-offset-2 cursor-pointer transition-colors disabled:cursor-not-allowed disabled:opacity-60'
             >
               <Navigation
                 className={`w-4 h-4 ${locationLoading ? 'animate-pulse' : ''}`}
