@@ -162,20 +162,32 @@ describe('DestinationSearch', () => {
     )
   })
 
-  it('supports a reusable standalone variant for bordered form fields', () => {
+  it('inherits shared input appearances for standalone and embedded fields', () => {
     render(
-      <ControlledSearch
-        variant="standalone"
-        onSelect={vi.fn()}
-        onSubmit={vi.fn()}
-      />,
+      <div>
+        <ControlledSearch
+          variant="standalone"
+          onSelect={vi.fn()}
+          onSubmit={vi.fn()}
+        />
+        <ControlledSearch
+          variant="embedded"
+          onSelect={vi.fn()}
+          onSubmit={vi.fn()}
+        />
+      </div>,
     )
-    const input = screen.getByRole('combobox')
+    const inputs = screen.getAllByRole('combobox')
+    const standaloneInput = inputs[0]
+    const embeddedInput = inputs[1]
 
-    expect(input.className).toContain('destination-search-input--standalone')
-    expect(destinationSearchStylesheet).toMatch(
-      /\.destination-search-input--standalone\s*\{[^}]*border:\s*1px\s+solid\s+#d1d5db;[^}]*border-radius:\s*8px;/s,
-    )
+    expect(standaloneInput.className).toContain('destination-search-input--standalone')
+    expect(standaloneInput.className).toContain('border-input')
+    expect(standaloneInput.className).toContain('focus-visible:ring-[3px]')
+    expect(embeddedInput.className).toContain('destination-search-input--embedded')
+    expect(embeddedInput.className).toContain('border-0')
+    expect(embeddedInput.className).toContain('focus-visible:ring-0')
+    expect(destinationSearchStylesheet).not.toMatch(/\.destination-search-input--standalone\s*\{/)
     expect(homePageSource).toMatch(
       /<DestinationSearch[\s\S]*variant='standalone'[\s\S]*className='w-full pl-10 pr-4 py-6 text-base rounded-lg'/s,
     )

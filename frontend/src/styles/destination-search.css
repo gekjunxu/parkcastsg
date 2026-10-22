@@ -1,6 +1,4 @@
 .destination-search { position: relative; flex: 1; min-width: 0; }
-.destination-search-input--standalone { box-sizing: border-box; border: 1px solid #d1d5db; border-radius: 8px; background: #fff; outline: none; }
-.destination-search-input--standalone:focus-visible { outline: none; border-color: #2563eb; box-shadow: 0 0 0 3px rgb(37 99 235 / 22%); }
 .parking-search-input:focus-within { outline: 3px solid #2563eb; outline-offset: 2px; }
 .parking-shell input.destination-search-input:focus-visible { outline: none; outline-offset: 0; box-shadow: none; }
 .destination-search-input-with-clear { padding-right: 40px; }

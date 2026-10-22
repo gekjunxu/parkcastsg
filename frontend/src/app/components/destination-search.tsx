@@ -1,11 +1,17 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { X } from 'lucide-react'
 import { suggestLocations, type LocationSuggestion } from '../../api/geocode'
+import { Input, type InputAppearance } from './ui/input'
 import '../../styles/destination-search.css'
 
 const DEBOUNCE_MS = 250
 
 export type DestinationSearchVariant = 'embedded' | 'standalone'
+
+const inputAppearanceByVariant: Record<DestinationSearchVariant, InputAppearance> = {
+  embedded: 'bare',
+  standalone: 'default',
+}
 
 export interface DestinationSearchProps {
   value: string
@@ -125,16 +131,17 @@ export function DestinationSearch({
 
   return (
     <div className="destination-search">
-      <input
+      <Input
         ref={inputRef}
-        className={['destination-search-input', `destination-search-input--${variant}`, className, value ? 'destination-search-input-with-clear' : ''].filter(Boolean).join(' ')}
+        appearance={inputAppearanceByVariant[variant]}
+        className={['destination-search-input', \`destination-search-input--\${variant}\`, className, value ? 'destination-search-input-with-clear' : ''].filter(Boolean).join(' ')}
         type="text"
         role="combobox"
         aria-label={inputLabel}
         aria-autocomplete="list"
         aria-expanded={suggestions.length > 0}
         aria-controls={listId}
-        aria-activedescendant={activeIndex >= 0 ? `${listId}-option-${activeIndex}` : undefined}
+        aria-activedescendant={activeIndex >= 0 ? \`\${listId}-option-\${activeIndex}\` : undefined}
         placeholder={placeholder}
         value={value}
         onChange={event => onChange(event.target.value)}
@@ -164,8 +171,8 @@ export function DestinationSearch({
         <ul id={listId} className="destination-search-list" role="listbox">
           {suggestions.map((suggestion, index) => (
             <li
-              id={`${listId}-option-${index}`}
-              key={`${suggestion.label}-${suggestion.lat}-${suggestion.lng}`}
+              id={\`\${listId}-option-\${index}\`}
+              key={\`\${suggestion.label}-\${suggestion.lat}-\${suggestion.lng}\`}
               role="option"
               aria-selected={activeIndex === index}
               onMouseDown={event => {
