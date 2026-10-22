@@ -134,14 +134,14 @@ export function DestinationSearch({
       <Input
         ref={inputRef}
         appearance={inputAppearanceByVariant[variant]}
-        className={['destination-search-input', \`destination-search-input--\${variant}\`, className, value ? 'destination-search-input-with-clear' : ''].filter(Boolean).join(' ')}
+        className={['destination-search-input', `destination-search-input--${variant}`, className, value ? 'destination-search-input-with-clear' : ''].filter(Boolean).join(' ')}
         type="text"
         role="combobox"
         aria-label={inputLabel}
         aria-autocomplete="list"
         aria-expanded={suggestions.length > 0}
         aria-controls={listId}
-        aria-activedescendant={activeIndex >= 0 ? \`\${listId}-option-\${activeIndex}\` : undefined}
+        aria-activedescendant={activeIndex >= 0 ? `${listId}-option-${activeIndex}` : undefined}
         placeholder={placeholder}
         value={value}
         onChange={event => onChange(event.target.value)}
@@ -171,8 +171,8 @@ export function DestinationSearch({
         <ul id={listId} className="destination-search-list" role="listbox">
           {suggestions.map((suggestion, index) => (
             <li
-              id={\`\${listId}-option-\${index}\`}
-              key={\`\${suggestion.label}-\${suggestion.lat}-\${suggestion.lng}\`}
+              id={`${listId}-option-${index}`}
+              key={`${suggestion.label}-${suggestion.lat}-${suggestion.lng}`}
               role="option"
               aria-selected={activeIndex === index}
               onMouseDown={event => {
