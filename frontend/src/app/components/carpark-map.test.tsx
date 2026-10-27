@@ -1,7 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { CarparkMap } from './carpark-map'
-import type { CarparkMapProps } from './carpark-map'
 
 vi.mock('react-leaflet', async () => {
   const React = await import('react')
@@ -18,7 +17,7 @@ vi.mock('react-leaflet', async () => {
 
 vi.mock('leaflet.markercluster', () => ({}))
 
-const mapProps: CarparkMapProps = {
+const mapProps = {
   carparks: [],
   clusterCarparks: false,
   selectedCarparkId: null,
