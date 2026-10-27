@@ -1,5 +1,7 @@
 export type AvailabilityLevel = 'high' | 'moderate' | 'low' | 'full' | 'unknown';
 
+export const UNKNOWN_AVAILABILITY_TEXT = 'Live availability unavailable';
+
 export interface Carpark {
     id: string;
     name: string;
@@ -69,7 +71,7 @@ export function formatCarparkType(raw?: string): string {
 
 export function getAvailabilityText(carpark: Carpark): string {
     if (carpark.availabilityLevel === 'unknown') {
-        return 'Live availability unavailable';
+        return UNKNOWN_AVAILABILITY_TEXT;
     }
     if (carpark.availabilityLevel === 'full') {
         return 'Full';

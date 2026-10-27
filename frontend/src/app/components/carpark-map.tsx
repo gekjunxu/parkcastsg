@@ -3,7 +3,7 @@ import { MapContainer, TileLayer, Marker, Circle, CircleMarker, Tooltip, useMap 
 import L from 'leaflet'
 import 'leaflet.markercluster'
 import { LocateFixed, Plus, Minus, Info } from 'lucide-react'
-import { type Carpark, getAvailabilityColor } from '../data/carparks'
+import { type Carpark, getAvailabilityColor, UNKNOWN_AVAILABILITY_TEXT } from '../data/carparks'
 import type { Coordinates } from '../../api/geocode'
 import type { MapViewport } from '../utils/mapViewport'
 import 'leaflet/dist/leaflet.css'
@@ -21,6 +21,13 @@ interface CarparkMapProps {
   target: { center: Coordinates; zoom: number; revision: number }
   onViewportChange: (viewport: MapViewport) => void
   onMapMoved: () => void
+}
+
+function markerAccessibilityLabel(cp: Carpark) {
+  const availability = cp.availabilityLevel === 'unknown'
+    ? UNKNOWN_AVAILABILITY_TEXT
+    : `${cp.availableLots} lots available`
+  return `${cp.name}: ${availability}`
 }
 
 function pinIcon(cp: Carpark, selected = false) {
@@ -58,9 +65,10 @@ const ParkingPins = memo(function ParkingPins({ carparks, clusterCarparks, selec
       }),
     }) : null
     const pins = carparks.filter(cp => Number.isFinite(cp.lat) && Number.isFinite(cp.lng)).map(cp => {
-      const marker = L.marker([cp.lat, cp.lng], { icon: pinIcon(cp), title: cp.name, alt: `${cp.name}: ${cp.availabilityLevel === 'unknown' ? 'availability not tracked' : `${cp.availableLots} lots`}`, riseOnHover: true })
+      const accessibilityLabel = markerAccessibilityLabel(cp)
+      const marker = L.marker([cp.lat, cp.lng], { icon: pinIcon(cp), title: cp.name, alt: accessibilityLabel, riseOnHover: true })
       marker.on('click', () => onClick.current(cp.id))
-      marker.on('add', () => marker.getElement()?.setAttribute('aria-label', `${cp.name}: ${cp.availabilityLevel === 'unknown' ? 'availability not tracked' : `${cp.availableLots} lots available`}`))
+      marker.on('add', () => marker.getElement()?.setAttribute('aria-label', accessibilityLabel))
       markers.current.set(cp.id, marker)
       return marker
     })
@@ -137,7 +145,7 @@ export const CarparkMap = memo(function CarparkMap(props: CarparkMapProps) {
       <span><i style={{ background: '#10B981' }} /> High</span>
       <span><i style={{ background: '#F59E0B' }} /> Moderate / low</span>
       <span><i style={{ background: '#EF4444' }} /> Full</span>
-      <span><i style={{ background: '#9CA3AF' }} /> P · Not tracked</span>
+      <span><i style={{ background: '#9CA3AF' }} /> P · {UNKNOWN_AVAILABILITY_TEXT}</span>
       {props.clusterCarparks && <small>Zoomed-out groups show carpark counts. Zoom in to see individual carparks.</small>}
     </div>}
   </div>
