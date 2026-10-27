@@ -30,3 +30,37 @@ updates:
     directory: /
     schedule:
       interval: monthly
+
+  - package-ecosystem: npm
+    directory: /frontend
+    target-branch: staging
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    groups:
+      frontend-dependencies-staging:
+        patterns:
+          - "*"
+        exclude-patterns:
+          - "react"
+          - "react-dom"
+          - "react-router"
+
+  - package-ecosystem: pip
+    directory: /backend
+    target-branch: staging
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+
+  - package-ecosystem: docker
+    directory: /
+    target-branch: staging
+    schedule:
+      interval: monthly
+
+  - package-ecosystem: github-actions
+    directory: /
+    target-branch: staging
+    schedule:
+      interval: monthly
