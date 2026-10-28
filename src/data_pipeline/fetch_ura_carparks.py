@@ -18,9 +18,6 @@ import json
 from pathlib import Path
 from typing import Any, Iterable
 
-import requests
-
-
 DATASET_ID = "d_9bf8620ecfdc8a5f8f77e3f02160af5c"
 POLL_DOWNLOAD_URL = (
     "https://api-open.data.gov.sg/v1/public/api/datasets/"
@@ -78,6 +75,8 @@ def _load_lta_codes() -> set[str]:
 
 
 def _download_geojson() -> dict[str, Any]:
+    import requests
+
     response = requests.get(POLL_DOWNLOAD_URL, timeout=30)
     response.raise_for_status()
     payload = response.json()
