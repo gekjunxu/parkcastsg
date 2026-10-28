@@ -8,6 +8,8 @@ database pipeline.
 
 - `fetch_lta_carparks.py`: downloads LTA carpark metadata and writes the static
   LTA lookup CSV.
+- `fetch_ura_carparks.py`: downloads URA parking-place capacity and writes new
+  car-capable URA records not already present in the LTA lookup.
 - `geocode_rates_carparks.py`: geocodes rate-catalogue entries that are not in
   the HDB or LTA datasets.
 - `generate_coords.py`: converts HDB SVY21 coordinates to WGS84.
@@ -29,6 +31,13 @@ frontend pricing parser supports time bands, per-entry charges, and free periods
 There is currently no automatic updater for `CarparkRates.csv`. Each public
 release should record where and when its rate catalogue was obtained.
 
+The URA catalogue is a location/capacity snapshot from the official
+[Capacity of URA Parking Places dataset](https://data.gov.sg/datasets/d_9bf8620ecfdc8a5f8f77e3f02160af5c/view).
+It intentionally does not copy text from `CarparkRates.csv`, so adding URA
+locations cannot silently attach an old rate. URA also provides a live
+`Car_Park_Availability` API, but it requires a URA access key and daily token;
+the application currently exposes these records with unknown availability.
+
 ## Verified rate corrections
 
 The Downtown East and Harbourfront Centre rows were checked against their
@@ -45,6 +54,14 @@ corrected to the Alexandra store using its official address and a geotagged
 <https://commons.wikimedia.org/wiki/File:Ikea_Alexandra_Singapore_(2025)_-_img_02.jpg>.
 These checks apply to these four records only; the rest of the catalogue still
 needs periodic source-by-source review.
+
+Pasir Ris Mall was added to the supplemental catalogue on 2026-10-28 using the
+mall's published carpark tariff and OneMap address lookup. This refresh did not
+bulk-update the other `CarparkRates.csv` rows: they remain a static snapshot and
+must be checked against each operator's current tariff before being changed.
+
+Pasir Ris Mall tariff: <https://pasirrismall.com.sg/explore-pasir-ris-mall/getting-here/>.
+Pasir Ris Mall address lookup: OneMap, `7 Pasir Ris Central, Singapore 519612`.
 
 Downtown East's pricing details also note that school holidays follow the
 Fri–Sun tariff. School-holiday dates are not modeled by the app, so it cannot

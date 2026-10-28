@@ -12,13 +12,15 @@ from app.carparks.sources.base import CarparkSource
 from app.carparks.sources.hdb import HdbSource
 from app.carparks.sources.lta import LtaSource
 from app.carparks.sources.supplemental import SupplementalSource
+from app.carparks.sources.ura import UraSource
 from app.data.carpark_lookup import CARPARK_LOOKUP
 from app.data.lta_carpark_lookup import LTA_CARPARK_LOOKUP
 from app.data.lta_rates_lookup import lookup_rate
 from app.data.supplemental_carpark_lookup import SUPPLEMENTAL_CARPARK_LOOKUP, SUPPLEMENTAL_ID_LOOKUP
+from app.data.ura_carpark_lookup import URA_CARPARK_LOOKUP
 
 
-_SOURCE_PRIORITY = {"hdb": 0, "lta": 1, "supplemental": 2}
+_SOURCE_PRIORITY = {"hdb": 0, "lta": 1, "ura": 2, "supplemental": 3}
 
 
 class CarparkService:
@@ -89,6 +91,7 @@ def build_default_service() -> CarparkService:
         [
             HdbSource(CARPARK_LOOKUP),
             LtaSource(LTA_CARPARK_LOOKUP, lookup_rate, os.getenv("LTA_API_KEY") or ""),
+            UraSource(URA_CARPARK_LOOKUP),
             SupplementalSource(SUPPLEMENTAL_CARPARK_LOOKUP, SUPPLEMENTAL_ID_LOOKUP, lookup_rate),
         ]
     )

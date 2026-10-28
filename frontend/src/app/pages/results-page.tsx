@@ -22,7 +22,7 @@ const SG = { lat: 1.3521, lng: 103.8198 }
 const PAGE_SIZE = 30
 const shelteredFilter = new ShelteredCarparkFilter()
 const freeWeekendFilter = new FreeSundayPublicHolidayCarparkFilter()
-type ViewMemory = { viewport: MapViewport | null; selected: string | null; listOpen: boolean; sort: 'recommended' | 'cheapest' | 'closest' | 'available'; rainMode: boolean; freeWeekendMode: boolean }
+type ViewMemory = { viewport: MapViewport | null; selected: string | null; listOpen: boolean; sort: 'nearby' | 'cheapest' | 'closest' | 'available'; rainMode: boolean; freeWeekendMode: boolean }
 type SheetDrag = { top: number; height: number }
 type SheetPointerStart = { pointerId: number; startY: number; height: number; workspaceHeight: number; moved: boolean }
 const savedViews = new Map<string, ViewMemory>()
@@ -64,7 +64,7 @@ export function ResultsPage() {
   const [refresh, setRefresh] = useState(0)
   const [updated, setUpdated] = useState<number | null>(null)
   const [selected, setSelected] = useState<string | null>(saved?.selected ?? null)
-  const [sort, setSort] = useState<'recommended' | 'cheapest' | 'closest' | 'available'>(saved?.sort ?? 'recommended')
+  const [sort, setSort] = useState<'nearby' | 'cheapest' | 'closest' | 'available'>(saved?.sort ?? 'nearby')
   const [rainMode, setRainMode] = useState(saved?.rainMode ?? false)
   const [freeWeekendMode, setFreeWeekendMode] = useState(saved?.freeWeekendMode ?? false)
   const [filtersOpen, setFiltersOpen] = useState(false)

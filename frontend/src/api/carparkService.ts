@@ -26,7 +26,7 @@ export interface NearbyCarpark {
   distance: number // metres
   night_parking: boolean | null
   car_park_type: string
-  source: 'hdb' | 'lta' | 'supplemental'
+  source: 'hdb' | 'lta' | 'ura' | 'supplemental'
   weekdays_rate_1: string | null
   weekdays_rate_2: string | null
   saturday_rate: string | null
@@ -116,8 +116,6 @@ function distanceToWalkingMinutes(distanceMetres: number): number {
 }
 
 export function transformCarpark(raw: NearbyCarpark): Carpark {
-    const isLta = raw.source === 'lta';
-    const isSupplemental = raw.source === 'supplemental';
     const availabilityLevel = crowdToAvailability(raw.crowd_level);
     const cp: Carpark = {
         id: raw.id,
@@ -149,8 +147,6 @@ export function transformCarpark(raw: NearbyCarpark): Carpark {
         isCentral: raw.is_central,
         isPeak: raw.is_peak,
         availabilityUpdatedAt: raw.availability_timestamp ?? undefined,
-        // LTA/supplemental carparks are not marked recommended (unknown availability)
-        isRecommended: !isLta && !isSupplemental && availabilityLevel === 'high' && raw.is_sheltered === true,
     };
 
     // Assign accurate live numeric rate for all carparks so they sort correctly

@@ -7,10 +7,10 @@ rate catalogue and runs without a database or machine-learning service.
 ## What it does
 
 - Searches Singapore destinations and postal codes with OneMap.
-- Shows nearby HDB, LTA DataMall, and supplemental carparks.
+- Shows nearby HDB, LTA DataMall, URA, and supplemental carparks.
 - Displays live availability where an upstream source provides it.
 - Calculates current HDB pricing and shows published commercial rates.
-- Sorts by cheapest, closest, availability, or a balanced recommendation.
+- Sorts by cheapest, closest, most available, or available nearby. Available nearby prioritises live availability, then walking time; Most Available uses the reported free-lot count.
 - Shows rain conditions, shelter information, favourites, and navigation links.
 
 ## Architecture
@@ -23,6 +23,7 @@ Browser
           `-- FastAPI
                 |-- data.gov.sg (HDB availability)
                 |-- LTA DataMall (optional live availability)
+                |-- bundled URA capacity catalogue
                 |-- data.gov.sg weather forecast
                 `-- bundled CSV rate and location catalogues
 ```
@@ -101,6 +102,8 @@ The bundled catalogues live in `backend/app/data/`:
 - `HDBCarparkInformation.csv`: HDB properties and parking rules.
 - `CarparkRates.csv`: commercial and public carpark rate descriptions.
 - `lta_carparks.csv`: LTA carpark locations.
+- `ura_carparks.csv`: URA car-capable parking places not already in the LTA
+  location snapshot; includes static capacity, not live availability or rates.
 - `supplemental_carparks.csv`: rate-only carparks not covered by live sources.
 
 Rate completeness and freshness are more important than prediction accuracy for

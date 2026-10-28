@@ -47,6 +47,19 @@ class FakeSource:
 
 
 class CarparkServiceTests(unittest.IsolatedAsyncioTestCase):
+    def test_source_priority_places_ura_between_lta_and_supplemental(self):
+        sources = [
+            FakeSource("supplemental", []),
+            FakeSource("ura", []),
+            FakeSource("lta", []),
+            FakeSource("hdb", []),
+        ]
+
+        self.assertEqual(
+            [source.source_name for source in CarparkService(sources).sources],
+            ["hdb", "lta", "ura", "supplemental"],
+        )
+
     def setUp(self):
         self.hdb = FakeSource(
             "hdb",

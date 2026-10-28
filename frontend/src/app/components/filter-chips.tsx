@@ -1,10 +1,10 @@
 import { CalendarCheck2, CloudRain } from 'lucide-react';
 
 interface FilterChipsProps {
-    selectedFilter: 'recommended' | 'cheapest' | 'closest' | 'available';
+    selectedFilter: 'nearby' | 'cheapest' | 'closest' | 'available';
     rainMode: boolean;
     freeWeekendMode: boolean;
-    onFilterChange: (filter: 'recommended' | 'cheapest' | 'closest' | 'available') => void;
+    onFilterChange: (filter: 'nearby' | 'cheapest' | 'closest' | 'available') => void;
     onRainModeToggle: () => void;
     onFreeWeekendModeToggle: () => void;
 }
@@ -18,10 +18,10 @@ export function FilterChips({
     onFreeWeekendModeToggle,
 }: FilterChipsProps) {
     const filters: Array<{
-        id: 'recommended' | 'cheapest' | 'closest' | 'available';
+        id: 'nearby' | 'cheapest' | 'closest' | 'available';
         label: string;
     }> = [
-            { id: 'recommended', label: 'Recommended' },
+            { id: 'nearby', label: 'Available nearby' },
             { id: 'cheapest', label: 'Cheapest' },
             { id: 'closest', label: 'Closest' },
             { id: 'available', label: 'Most Available' },

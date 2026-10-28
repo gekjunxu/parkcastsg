@@ -290,7 +290,9 @@ export function CarparkDetailPage() {
                 <p className='text-xs text-gray-500 mt-3'>
                   {carpark.source === 'lta'
                     ? 'Live API from LTA DataMall'
-                    : 'Live API from data.gov.sg'}
+                    : carpark.source === 'ura'
+                      ? 'URA parking capacity catalogue'
+                      : 'Live API from data.gov.sg'}
                 </p>
               </>
             )}

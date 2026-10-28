@@ -3,6 +3,7 @@ import test from 'node:test'
 
 import type { Carpark } from '../data/carparks'
 import {
+  calculateLiveRates,
   generatePricingBreakdown,
   getNumericLiveCarRate,
   getTargetTextRate,
@@ -114,6 +115,16 @@ test('treats per-entry rates as non-comparable for cheapest sorting', () => {
 test('keeps hourly rates comparable for cheapest sorting', () => {
   const cp = makeLtaCarpark('$3.00 per hr')
   assert.equal(getNumericLiveCarRate(cp), 3)
+})
+
+test('does not apply HDB rates to static URA records without pricing data', () => {
+  const cp = makeLtaCarpark('')
+  cp.id = 'URA_A0001'
+  cp.name = 'URA Carpark'
+  cp.source = 'ura'
+
+  assert.equal(calculateLiveRates(cp).car, 'Rate unavailable')
+  assert.equal(getNumericLiveCarRate(cp), Number.POSITIVE_INFINITY)
 })
 
 test('resolves weekend rates marked as the weekday schedule', () => {

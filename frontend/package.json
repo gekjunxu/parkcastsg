@@ -7,7 +7,7 @@
         "dev": "vite",
         "build": "vite build",
         "typecheck": "tsc --noEmit",
-        "test": "node --import tsx --test src/app/utils/pricingEngine.test.ts src/app/utils/mapViewport.test.ts src/app/utils/carpark-filters.test.ts src/api/geocode.test.ts",
+        "test": "node --import tsx --test src/app/utils/pricingEngine.test.ts src/app/utils/mapViewport.test.ts src/app/utils/carpark-filters.test.ts src/app/data/carparks.test.ts src/api/geocode.test.ts",
         "test:component": "vitest run --environment jsdom src/app/components/destination-search.test.tsx"
     },
     "dependencies": {

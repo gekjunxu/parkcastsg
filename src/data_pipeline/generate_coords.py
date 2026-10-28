@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pandas as pd
 from pyproj import Transformer
 
@@ -5,10 +7,12 @@ from pyproj import Transformer
 
 def generate_clean_hdb_coords():
     print("Loading raw HDB carpark data...")
+    data_dir = Path(__file__).resolve().parent
+    source_path = data_dir / "HDBCarparkInformation.csv"
     try:
-        df = pd.read_csv("hdbcarparkinformation.csv")
+        df = pd.read_csv(source_path)
     except FileNotFoundError:
-        print("Error: Could not find 'hdb_carpark_information.csv'.")
+        print(f"Error: Could not find '{source_path}'.")
         return
 
     # EPSG:3414 is SVY21 (Singapore), EPSG:4326 is WGS84 (Standard GPS)
@@ -31,7 +35,7 @@ def generate_clean_hdb_coords():
     clean_df = clean_df.rename(columns={'car_park_no': 'carpark_id'})
 
     # Save the final clean CSV!
-    clean_df.to_csv("hdb_clean_coords.csv", index=False)
+    clean_df.to_csv(data_dir / "hdb_clean_coords.csv", index=False)
     print(f"Success! Translated {len(clean_df)} carparks.")
     print("Saved as 'hdb_clean_coords.csv'.")
 

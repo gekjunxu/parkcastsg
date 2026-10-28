@@ -408,7 +408,7 @@ export function calculateLiveRates(carpark: Carpark): LivePrices {
   }
 
   // --- NON-HDB CUSTOM PARSABLE RATES ---
-  if (carpark.source === 'lta' || carpark.source === 'supplemental') {
+  if (carpark.source === 'lta' || carpark.source === 'ura' || carpark.source === 'supplemental') {
     const rateText = getTargetTextRate(carpark, day, now);
     const parsed = parseTextRate(rateText, hour, day);
 
@@ -494,7 +494,7 @@ export function calculateLiveRates(carpark: Carpark): LivePrices {
  * Returns Infinity when no comparable rate is known so unknown prices sort last.
  */
 export function getNumericLiveCarRate(carpark: Carpark): number {
-  if (carpark.source === 'lta' || carpark.source === 'supplemental') {
+  if (carpark.source === 'lta' || carpark.source === 'ura' || carpark.source === 'supplemental') {
     const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Singapore' }));
     const parsed = parseTextRate(
       getTargetTextRate(carpark, now.getDay(), now),
@@ -540,7 +540,7 @@ export function generatePricingBreakdown(carpark: Carpark) {
     : "Short-term parking allowed Whole Day.";
 
   // --- NON-HDB RAW RATE DISPLAY ---
-  if (carpark.source === 'lta' || carpark.source === 'supplemental') {
+  if (carpark.source === 'lta' || carpark.source === 'ura' || carpark.source === 'supplemental') {
     return {
       car: [
         shortTermMsg,

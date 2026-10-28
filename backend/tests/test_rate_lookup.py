@@ -71,6 +71,17 @@ class RateLookupTests(unittest.TestCase):
         self.assertIn("free parking", rates["weekdays_rate_1"].lower())
         self.assertIn("no maximum stay", rates["weekdays_rate_1"].lower())
 
+    def test_pasir_ris_mall_uses_published_tariff_and_location(self):
+        rates = lookup_rate("Pasir Ris Mall")
+        location = SUPPLEMENTAL_CARPARK_LOOKUP["pasir ris mall"]
+
+        self.assertIsNotNone(rates)
+        assert rates is not None
+        self.assertIn("$1.36", rates["weekdays_rate_1"])
+        self.assertIn("$1.52", rates["saturday_rate"])
+        self.assertAlmostEqual(location["lat"], 1.373824377794677)
+        self.assertAlmostEqual(location["lng"], 103.9487488736156)
+
 
 class StaticLtaFallbackTests(unittest.IsolatedAsyncioTestCase):
     async def test_static_lta_locations_are_returned_without_api_key(self):

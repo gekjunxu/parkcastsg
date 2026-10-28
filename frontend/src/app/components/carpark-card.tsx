@@ -1,14 +1,6 @@
 import { MapPin, CloudRain } from 'lucide-react';
-import { type AvailabilityLevel, type Carpark, getAvailabilityColor, getAvailabilityText, formatCarparkType } from '../data/carparks';
+import { type Carpark, getAvailabilityColor, getAvailabilityText } from '../data/carparks';
 import { calculateLiveRates } from '../utils/pricingEngine';
-
-const RECOMMENDATION_AVAILABILITY_LABEL: Record<AvailabilityLevel, string> = {
-    high: 'High availability',
-    moderate: 'Moderate availability',
-    low: 'Low availability',
-    full: 'Full',
-    unknown: 'Availability unavailable',
-};
 
 interface CarparkCardProps {
     carpark: Carpark;
@@ -23,8 +15,9 @@ export function CarparkCard({ carpark, isSelected, showRainIcon, onClick, onView
     const availabilityColor = getAvailabilityColor(carpark.availabilityLevel);
     const availabilityText = getAvailabilityText(carpark);
     const isLta = carpark.source === 'lta';
+    const isUra = carpark.source === 'ura';
     const isSupplemental = carpark.source === 'supplemental';
-    const isNonHdb = isLta || isSupplemental;
+    const isNonHdb = isLta || isUra || isSupplemental;
 
     return (
         <div
@@ -44,11 +37,6 @@ export function CarparkCard({ carpark, isSelected, showRainIcon, onClick, onView
                         <h3 className="font-semibold text-gray-900 text-base flex-1 truncate">
                             <button type="button" className="text-left w-full" aria-label={`Show ${carpark.name} on map`}>{carpark.name}</button>
                         </h3>
-                        {carpark.isRecommended && (
-                            <span className="px-2 py-0.5 bg-[#10B981] text-white text-xs font-medium rounded-full whitespace-nowrap">
-                                Recommended
-                            </span>
-                        )}
                         {isNonHdb && (
                             <span className="px-2 py-0.5 bg-purple-100 text-purple-700 text-xs font-medium rounded-full whitespace-nowrap">
                                 Non-HDB
@@ -113,15 +101,6 @@ export function CarparkCard({ carpark, isSelected, showRainIcon, onClick, onView
                         )}
                     </div>
 
-                    {/* Recommendation Reason */}
-                    {carpark.isRecommended && (
-                        <div className="mt-2 pt-2 border-t border-gray-100">
-                            <p className="text-xs text-gray-600">
-                                {RECOMMENDATION_AVAILABILITY_LABEL[carpark.availabilityLevel]} · {carpark.isSheltered ? 'Sheltered' : formatCarparkType(carpark.carparkType)}
-                            </p>
-                        </div>
-                    )}
-                    
                     {/* View Details Button (visible when selected) */}
                     {isSelected && (
                         <div className="mt-4 border-t border-gray-100 pt-3">

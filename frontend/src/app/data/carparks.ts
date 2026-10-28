@@ -19,10 +19,9 @@ export interface Carpark {
     weekendRate?: number;
     isSheltered: boolean | null;
     carparkType?: string;
-    isRecommended?: boolean;
     distance: number; // in meters
     nightParking?: boolean | null;
-    source?: 'hdb' | 'lta' | 'supplemental'; // data source
+    source?: 'hdb' | 'lta' | 'ura' | 'supplemental'; // data source
     // Parking rates from CarparkRates.csv — only populated for LTA/supplemental carparks
     // where a name match was found; undefined means "data not available".
     weekdaysRate1?: string;
@@ -82,7 +81,7 @@ export function getAvailabilityText(carpark: Carpark): string {
 
 export function sortCarparks(
     carparks: Carpark[],
-    sortBy: 'recommended' | 'cheapest' | 'closest' | 'available'
+    sortBy: 'nearby' | 'cheapest' | 'closest' | 'available'
 ): Carpark[] {
     const sorted = [...carparks];
 
@@ -98,17 +97,19 @@ export function sortCarparks(
                 if (aUnknown !== bUnknown) return aUnknown ? 1 : -1;
                 return b.availableLots - a.availableLots;
             });
-        case 'recommended':
+        case 'nearby':
         default:
-            // Sort by: recommended first, then availability, then distance
+            // Prefer availability that is known to be useful, then shorter walks.
+            const availabilityOrder: Record<AvailabilityLevel, number> = {
+                high: 0,
+                moderate: 1,
+                low: 2,
+                unknown: 3,
+                full: 4,
+            };
             return sorted.sort((a, b) => {
-                if (a.isRecommended && !b.isRecommended) return -1;
-                if (!a.isRecommended && b.isRecommended) return 1;
-                // Push 'full' to end; treat 'unknown' as moderate (don't penalise)
-                if (a.availabilityLevel === 'full' && b.availabilityLevel !== 'full')
-                    return 1;
-                if (a.availabilityLevel !== 'full' && b.availabilityLevel === 'full')
-                    return -1;
+                const availabilityDifference = availabilityOrder[a.availabilityLevel] - availabilityOrder[b.availabilityLevel];
+                if (availabilityDifference !== 0) return availabilityDifference;
                 return a.walkingMinutes - b.walkingMinutes;
             });
     }
