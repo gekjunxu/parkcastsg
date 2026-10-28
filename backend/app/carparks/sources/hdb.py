@@ -30,7 +30,7 @@ class HdbSource:
 
     def owns_id(self, carpark_id: str) -> bool:
         normalized = carpark_id.upper()
-        return not normalized.startswith(("LTA_", "SUPP_"))
+        return not normalized.startswith(("LTA_", "URA_", "SUPP_"))
 
     async def _fetch_payload(self, operation: str, carpark_id: str | None) -> dict[str, Any]:
         client_kwargs: dict[str, Any] = {"timeout": 10.0}

@@ -93,6 +93,7 @@ class HdbSourceTests(unittest.IsolatedAsyncioTestCase):
         source = HdbSource(LOOKUP)
         self.assertTrue(source.owns_id("A1"))
         self.assertFalse(source.owns_id("LTA_A1"))
+        self.assertFalse(source.owns_id("URA_A1"))
         self.assertFalse(source.owns_id("SUPP_A1"))
 
 
