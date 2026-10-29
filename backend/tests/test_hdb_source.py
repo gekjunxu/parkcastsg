@@ -91,10 +91,7 @@ class HdbSourceTests(unittest.IsolatedAsyncioTestCase):
 
     def test_source_ownership(self):
         source = HdbSource(LOOKUP)
-        self.assertTrue(source.owns_id("A1"))
-        self.assertFalse(source.owns_id("LTA_A1"))
-        self.assertFalse(source.owns_id("URA_A1"))
-        self.assertFalse(source.owns_id("SUPP_A1"))
+        self.assertIsNone(source.id_prefix)
 
 
 if __name__ == "__main__":

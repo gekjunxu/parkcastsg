@@ -15,12 +15,10 @@ class UraSource:
     """Static URA locations and capacity; live availability is not assumed."""
 
     source_name = "ura"
+    id_prefix = URA_ID_PREFIX
 
     def __init__(self, lookup: Mapping[str, dict]) -> None:
         self.lookup = lookup
-
-    def owns_id(self, carpark_id: str) -> bool:
-        return carpark_id.upper().startswith(URA_ID_PREFIX)
 
     def _record(
         self,

@@ -47,8 +47,7 @@ class SupplementalSourceTests(unittest.IsolatedAsyncioTestCase):
 
     def test_source_ownership(self):
         source = SupplementalSource(LOOKUP, ID_LOOKUP, lambda name: None)
-        self.assertTrue(source.owns_id(SLASH_ID))
-        self.assertFalse(source.owns_id("LTA_CP1"))
+        self.assertEqual(source.id_prefix, "SUPP_")
 
 
 if __name__ == "__main__":

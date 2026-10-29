@@ -72,6 +72,30 @@ npm run dev
 The frontend defaults to `http://localhost:8000` during development. Override it
 with `VITE_API_BASE_URL` when the API is elsewhere.
 
+## Tests
+
+Backend coverage and frontend unit/component coverage are enforced in CI. From
+the repository root, run the same checks locally with:
+
+```powershell
+cd backend
+pip install -r requirements-dev.txt
+$env:PYTHONPATH = ".."
+python -m coverage run --branch --source=app -m unittest discover -s tests -v
+python -m coverage report --fail-under=80
+
+cd ..\frontend
+npm ci
+npm run typecheck
+npm run test:coverage
+npm run test:component:coverage
+npm run build
+npm run test:e2e
+```
+
+The Playwright test mocks public API responses so it covers the home → results
+→ carpark detail flow without depending on live services.
+
 ## Self-hosting on OpenWrt
 
 The single-container layout is suitable for a small Linux server, NAS, Raspberry

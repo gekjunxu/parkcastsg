@@ -109,6 +109,49 @@ describe('DestinationSearch', () => {
     expect(onSubmit).not.toHaveBeenCalled()
   })
 
+  it('closes suggestions on blur', async () => {
+    render(
+      <ControlledSearch
+        onSelect={vi.fn()}
+        onSubmit={vi.fn()}
+      />,
+    )
+    const input = screen.getByRole('combobox')
+
+    await act(async () => {
+      fireEvent.focus(input)
+      fireEvent.change(input, { target: { value: 'ma' } })
+      await vi.advanceTimersByTimeAsync(250)
+      await vi.runAllTimersAsync()
+    })
+    expect(screen.getByRole('option')).toBeTruthy()
+
+    fireEvent.blur(input)
+    await act(async () => { await vi.runAllTimersAsync() })
+    expect(screen.queryByRole('option')).toBeNull()
+  })
+
+  it('supports mouse selection', async () => {
+    const onSelect = vi.fn()
+    render(
+      <ControlledSearch
+        onSelect={onSelect}
+        onSubmit={vi.fn()}
+      />,
+    )
+    const input = screen.getByRole('combobox')
+    await act(async () => {
+      fireEvent.focus(input)
+      fireEvent.change(input, { target: { value: 'marina' } })
+      await Promise.resolve()
+    })
+    await act(async () => { await vi.advanceTimersByTimeAsync(249) })
+    await act(async () => { await vi.advanceTimersByTimeAsync(1) })
+    await act(async () => { await vi.runAllTimersAsync(); await Promise.resolve() })
+    fireEvent.mouseDown(screen.getByRole('option'))
+    expect(onSelect).toHaveBeenCalledWith(suggestion)
+  })
+
   it('submits text when Enter has no active suggestion and ignores IME Enter', () => {
     const onSubmit = vi.fn()
     render(

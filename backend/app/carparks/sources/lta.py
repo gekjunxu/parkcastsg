@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 
 class LtaSource:
     source_name = "lta"
+    id_prefix = LTA_ID_PREFIX
 
     def __init__(
         self,
@@ -34,9 +35,6 @@ class LtaSource:
         self.api_key = api_key
         self.availability_url = availability_url
         self.transport = transport
-
-    def owns_id(self, carpark_id: str) -> bool:
-        return carpark_id.upper().startswith(LTA_ID_PREFIX)
 
     def _log_warning(self, operation: str, carpark_id: str | None, detail: str) -> None:
         logger.warning(

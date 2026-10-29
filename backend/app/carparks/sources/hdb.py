@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 
 class HdbSource:
     source_name = "hdb"
+    id_prefix = None
 
     def __init__(
         self,
@@ -27,10 +28,6 @@ class HdbSource:
         self.lookup = lookup
         self.availability_url = availability_url
         self.transport = transport
-
-    def owns_id(self, carpark_id: str) -> bool:
-        normalized = carpark_id.upper()
-        return not normalized.startswith(("LTA_", "URA_", "SUPP_"))
 
     async def _fetch_payload(self, operation: str, carpark_id: str | None) -> dict[str, Any]:
         client_kwargs: dict[str, Any] = {"timeout": 10.0}

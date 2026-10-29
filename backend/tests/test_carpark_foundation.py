@@ -64,7 +64,8 @@ class CarparkFoundationTests(unittest.TestCase):
 
     def test_source_protocol_declares_the_adapter_contract(self):
         self.assertIn("source_name", CarparkSource.__annotations__)
-        for method_name in ("owns_id", "list_nearby", "get_by_id"):
+        self.assertIn("id_prefix", CarparkSource.__annotations__)
+        for method_name in ("list_nearby", "get_by_id"):
             self.assertTrue(callable(getattr(CarparkSource, method_name)))
             self.assertIsNotNone(inspect.signature(getattr(CarparkSource, method_name)))
 

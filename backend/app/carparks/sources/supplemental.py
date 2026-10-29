@@ -13,6 +13,7 @@ SUPPLEMENTAL_ID_PREFIX = "SUPP_"
 
 class SupplementalSource:
     source_name = "supplemental"
+    id_prefix = SUPPLEMENTAL_ID_PREFIX
 
     def __init__(
         self,
@@ -24,9 +25,6 @@ class SupplementalSource:
         self.id_lookup = id_lookup
         self.rates = rates
         self._id_by_name = {norm_name: carpark_id for carpark_id, norm_name in id_lookup.items()}
-
-    def owns_id(self, carpark_id: str) -> bool:
-        return carpark_id.upper().startswith(SUPPLEMENTAL_ID_PREFIX)
 
     @staticmethod
     def _id_for(norm_name: str) -> str:

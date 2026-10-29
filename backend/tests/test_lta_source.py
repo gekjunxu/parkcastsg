@@ -118,9 +118,7 @@ class LtaSourceTests(unittest.IsolatedAsyncioTestCase):
 
     def test_source_ownership(self):
         source = LtaSource(LOOKUP, RATES, "")
-        self.assertTrue(source.owns_id("LTA_CP1"))
-        self.assertFalse(source.owns_id("CP1"))
-        self.assertFalse(source.owns_id("SUPP_CP1"))
+        self.assertEqual(source.id_prefix, "LTA_")
 
 
 if __name__ == "__main__":

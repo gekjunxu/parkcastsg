@@ -46,3 +46,7 @@ venv/
 .venv/
 env/
 backend/parkcastsg/
+backend/.coverage
+frontend/coverage/
+frontend/playwright-report/
+frontend/test-results/

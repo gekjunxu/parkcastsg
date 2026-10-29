@@ -5,7 +5,6 @@ import os
 from collections.abc import Sequence
 from math import ceil, isfinite
 
-from app.carparks.errors import CarparkNotFoundError
 from app.carparks.helpers import canonicalise_name, haversine
 from app.carparks.models import CarparkAvailability
 from app.carparks.sources.base import CarparkSource
@@ -28,6 +27,14 @@ class CarparkService:
         self.sources = tuple(
             sorted(sources, key=lambda source: _SOURCE_PRIORITY.get(source.source_name, 99))
         )
+        routes = [(source.id_prefix.upper(), source) for source in self.sources if source.id_prefix]
+        fallback_sources = [source for source in self.sources if source.id_prefix is None]
+        if len(fallback_sources) != 1:
+            raise ValueError("CarparkService requires exactly one unprefixed fallback source")
+        if len({prefix for prefix, _ in routes}) != len(routes):
+            raise ValueError("CarparkService source ID prefixes must be unique")
+        self._id_routes = tuple(sorted(routes, key=lambda route: len(route[0]), reverse=True))
+        self._fallback_source = fallback_sources[0]
 
     async def nearby(self, lat: float, lng: float, radius: int) -> list[CarparkAvailability]:
         source_results = await asyncio.gather(
@@ -75,15 +82,11 @@ class CarparkService:
         self, carpark_id: str, lat: float | None, lng: float | None
     ) -> CarparkAvailability:
         normalized = carpark_id.upper()
-        for source in self.sources:
-            if source.owns_id(normalized):
-                return await source.get_by_id(normalized, lat, lng)
-        raise CarparkNotFoundError(
-            "service",
-            "get_by_id",
-            carpark_id,
-            f"Carpark '{carpark_id}' not found",
+        source = next(
+            (source for prefix, source in self._id_routes if normalized.startswith(prefix)),
+            self._fallback_source,
         )
+        return await source.get_by_id(normalized, lat, lng)
 
 
 def build_default_service() -> CarparkService:

@@ -8,9 +8,7 @@ from app.carparks.models import CarparkAvailability
 @runtime_checkable
 class CarparkSource(Protocol):
     source_name: str
-
-    def owns_id(self, carpark_id: str) -> bool:
-        ...
+    id_prefix: str | None
 
     async def list_nearby(
         self, lat: float, lng: float, radius: int
