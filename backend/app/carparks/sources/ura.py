@@ -66,7 +66,12 @@ class UraSource:
             async with httpx.AsyncClient(**client_kwargs) as client:
                 response = await client.get(
                     self.token_url,
-                    headers={"AccessKey": self.api_key, "accept": "application/json"},
+                    headers={
+                        "AccessKey": self.api_key,
+                        "accept": "application/json",
+                        "User-Agent": "ParkCastSG/1.0",
+                        "Referer": "https://eservice.ura.gov.sg/maps/api/",
+                    },
                 )
                 response.raise_for_status()
         except httpx.HTTPError as exc:
@@ -105,6 +110,8 @@ class UraSource:
                         "AccessKey": self.api_key,
                         "Token": token,
                         "accept": "application/json",
+                        "User-Agent": "ParkCastSG/1.0",
+                        "Referer": "https://eservice.ura.gov.sg/maps/api/",
                     },
                 )
                 response.raise_for_status()

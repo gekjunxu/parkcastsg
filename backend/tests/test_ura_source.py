@@ -95,8 +95,18 @@ class UraSourceTests(unittest.IsolatedAsyncioTestCase):
         availability_requests = [request for request in requests if request.url.path == "/availability"]
         self.assertEqual(len(token_requests), 1)
         self.assertEqual(token_requests[0].headers["AccessKey"], "ura-key")
+        self.assertEqual(token_requests[0].headers["User-Agent"], "ParkCastSG/1.0")
+        self.assertEqual(
+            token_requests[0].headers["Referer"],
+            "https://eservice.ura.gov.sg/maps/api/",
+        )
         self.assertEqual(len(availability_requests), 2)
         self.assertEqual(availability_requests[0].headers["Token"], "daily-token")
+        self.assertEqual(availability_requests[0].headers["User-Agent"], "ParkCastSG/1.0")
+        self.assertEqual(
+            availability_requests[0].headers["Referer"],
+            "https://eservice.ura.gov.sg/maps/api/",
+        )
         self.assertEqual(
             availability_requests[0].url.params["service"],
             "Car_Park_Availability",
