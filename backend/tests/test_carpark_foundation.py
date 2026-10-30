@@ -39,6 +39,7 @@ class CarparkFoundationTests(unittest.TestCase):
         self.assertFalse(model.is_central)
         self.assertFalse(model.is_peak)
         self.assertIsNone(model.weekdays_rate_1)
+        self.assertEqual(model.rate_schedules, [])
         self.assertIsNone(model.availability_timestamp)
         self.assertEqual(LotTypeAvailability(lot_type="C", available_lots=1, total_lots=2).lot_type, "C")
 

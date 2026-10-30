@@ -1,12 +1,25 @@
 from __future__ import annotations
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class LotTypeAvailability(BaseModel):
     lot_type: str
     available_lots: int
     total_lots: int
+
+
+class CarparkRateSchedule(BaseModel):
+    vehicle_type: str
+    start_time: str
+    end_time: str
+    weekday_rate: str | None = None
+    weekday_min: str | None = None
+    saturday_rate: str | None = None
+    saturday_min: str | None = None
+    sunday_ph_rate: str | None = None
+    sunday_ph_min: str | None = None
+    remarks: str | None = None
 
 
 class CarparkAvailability(BaseModel):
@@ -32,4 +45,5 @@ class CarparkAvailability(BaseModel):
     weekdays_rate_2: str | None = None
     saturday_rate: str | None = None
     sunday_ph_rate: str | None = None
+    rate_schedules: list[CarparkRateSchedule] = Field(default_factory=list)
     availability_timestamp: str | None = None
