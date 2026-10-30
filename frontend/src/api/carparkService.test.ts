@@ -34,6 +34,18 @@ const rawCarpark: NearbyCarpark = {
   is_central: false,
   is_peak: false,
   availability_timestamp: null,
+  rate_schedules: [{
+    vehicle_type: 'C',
+    start_time: '07.00 AM',
+    end_time: '08.30 AM',
+    weekday_rate: '$0.60',
+    weekday_min: '30 mins',
+    saturday_rate: '$0.80',
+    saturday_min: '30 mins',
+    sunday_ph_rate: '$0.00',
+    sunday_ph_min: '0 mins',
+    remarks: null,
+  }],
 }
 
 afterEach(() => {
@@ -111,4 +123,21 @@ test('maps unknown availability and walking distance without inventing a rate', 
   assert.equal(carpark.walkingMinutes, 2)
   assert.equal(carpark.hourlyRate, Number.POSITIVE_INFINITY)
   assert.equal(carpark.availabilityUpdatedAt, undefined)
+})
+
+test('maps typed URA rate schedules without discarding day fields', () => {
+  const carpark = transformCarpark(rawCarpark)
+
+  assert.deepEqual(carpark.rateSchedules, [{
+    vehicleType: 'C',
+    startTime: '07.00 AM',
+    endTime: '08.30 AM',
+    weekdayRate: '$0.60',
+    weekdayMin: '30 mins',
+    saturdayRate: '$0.80',
+    saturdayMin: '30 mins',
+    sundayPhRate: '$0.00',
+    sundayPhMin: '0 mins',
+    remarks: null,
+  }])
 })

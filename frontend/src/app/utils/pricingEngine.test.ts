@@ -72,6 +72,20 @@ test('parses rates written with “to” time ranges and compact slash units', (
   assert.deepEqual(parseTextRate(rate, 3), { amount: 2.4, basis: 'hour' })
 })
 
+test('converts arbitrary minute billing intervals to an hourly comparison', () => {
+  assert.deepEqual(parseTextRate('$0.32 per 15 mins', 12), {
+    amount: 1.28,
+    basis: 'hour',
+  })
+})
+
+test('parses a URA-rendered time window and minimum duration', () => {
+  assert.deepEqual(
+    parseTextRate('07.00 AM-08.30 AM: $0.60 per 30 mins', 8),
+    { amount: 1.2, basis: 'hour' },
+  )
+})
+
 test('marks an amount without a billing unit as non-comparable', () => {
   assert.deepEqual(parseTextRate('Maximum charge $12.00', 12), {
     amount: 12,

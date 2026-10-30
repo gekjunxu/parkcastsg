@@ -1,4 +1,4 @@
-import type { Carpark, AvailabilityLevel } from '../app/data/carparks'
+import type { Carpark, AvailabilityLevel, CarparkRateSchedule } from '../app/data/carparks'
 import { getNumericLiveCarRate } from '../app/utils/pricingEngine'
 import { API_BASE } from '../app/runtime'
 import type { MapViewport } from '../app/utils/mapViewport'
@@ -10,6 +10,19 @@ export interface LotTypeAvailability {
   lot_type: string
   available_lots: number
   total_lots: number
+}
+
+export interface NearbyRateSchedule {
+  vehicle_type: string
+  start_time: string
+  end_time: string
+  weekday_rate: string | null
+  weekday_min: string | null
+  saturday_rate: string | null
+  saturday_min: string | null
+  sunday_ph_rate: string | null
+  sunday_ph_min: string | null
+  remarks: string | null
 }
 
 export interface NearbyCarpark {
@@ -31,6 +44,7 @@ export interface NearbyCarpark {
   weekdays_rate_2: string | null
   saturday_rate: string | null
   sunday_ph_rate: string | null
+  rate_schedules?: NearbyRateSchedule[]
   free_parking: string
   short_term_parking: string
   is_central: boolean
@@ -142,6 +156,18 @@ export function transformCarpark(raw: NearbyCarpark): Carpark {
         weekdaysRate2: raw.weekdays_rate_2 ?? undefined,
         saturdayRate: raw.saturday_rate ?? undefined,
         sundayPhRate: raw.sunday_ph_rate ?? undefined,
+        rateSchedules: raw.rate_schedules?.map((schedule): CarparkRateSchedule => ({
+          vehicleType: schedule.vehicle_type,
+          startTime: schedule.start_time,
+          endTime: schedule.end_time,
+          weekdayRate: schedule.weekday_rate,
+          weekdayMin: schedule.weekday_min,
+          saturdayRate: schedule.saturday_rate,
+          saturdayMin: schedule.saturday_min,
+          sundayPhRate: schedule.sunday_ph_rate,
+          sundayPhMin: schedule.sunday_ph_min,
+          remarks: schedule.remarks,
+        })) ?? [],
         freeParking: raw.free_parking,
         shortTermParking: raw.short_term_parking,
         isCentral: raw.is_central,

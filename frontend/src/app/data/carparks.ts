@@ -1,5 +1,18 @@
 export type AvailabilityLevel = 'high' | 'moderate' | 'low' | 'full' | 'unknown';
 
+export interface CarparkRateSchedule {
+    vehicleType: string;
+    startTime: string;
+    endTime: string;
+    weekdayRate: string | null;
+    weekdayMin: string | null;
+    saturdayRate: string | null;
+    saturdayMin: string | null;
+    sundayPhRate: string | null;
+    sundayPhMin: string | null;
+    remarks: string | null;
+}
+
 export interface Carpark {
     id: string;
     name: string;
@@ -28,6 +41,7 @@ export interface Carpark {
     weekdaysRate2?: string;
     saturdayRate?: string;
     sundayPhRate?: string;
+    rateSchedules?: CarparkRateSchedule[];
     // HDB pricing metadata
     freeParking?: string;
     shortTermParking?: string;

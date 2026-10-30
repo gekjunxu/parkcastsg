@@ -180,22 +180,53 @@ function segmentAppliesToDay(segment: string, currentDay: number | undefined): b
   return applicableDays.has(currentDay);
 }
 
-function getSegmentTimeWindow(segment: string): { startHour: number; endHour: number } | null {
+function parseTimeBoundary(value: string): { hour: number; min: number } | null {
+  const parsed = parseTimeString(value);
+  if (parsed) return parsed;
+  const compact = value.trim();
+  if (compact.length !== 4 || !/^[0-9]{4}$/.test(compact)) return null;
+  return {
+    hour: parseInt(compact.slice(0, 2), 10),
+    min: parseInt(compact.slice(2), 10),
+  };
+}
+
+function getSegmentTimeWindow(segment: string): {
+  startHour: number;
+  startMinute: number;
+  endHour: number;
+  endMinute: number;
+} | null {
   const clock = '(?:[0-9]+(?:\\.[0-9]+)?\\s*(?:am|pm|mn|midnight)|[0-9]{4})';
   const timeWindowMatch = segment.match(new RegExp(`(${clock})\\s*(?:-|to)\\s*(${clock})`, 'i'));
   if (!timeWindowMatch) return null;
 
-  const parseBoundary = (value: string) => parseHourBoundary(value) ?? parseInt(value.slice(0, 2), 10);
-  const startHour = parseBoundary(timeWindowMatch[1]);
-  const endHour = parseBoundary(timeWindowMatch[2]);
-  return Number.isNaN(startHour) || Number.isNaN(endHour) ? null : { startHour, endHour };
+  const start = parseTimeBoundary(timeWindowMatch[1]);
+  const end = parseTimeBoundary(timeWindowMatch[2]);
+  if (!start || !end) return null;
+  return {
+    startHour: start.hour,
+    startMinute: start.min,
+    endHour: end.hour,
+    endMinute: end.min,
+  };
 }
 
-function isHourInWindow(hour: number, startHour: number, endHour: number): boolean {
-  if (startHour === endHour) return true;
-  return startHour < endHour
-    ? hour >= startHour && hour < endHour
-    : hour >= startHour || hour < endHour;
+function isHourInWindow(
+  hour: number,
+  minute: number,
+  startHour: number,
+  startMinute: number,
+  endHour: number,
+  endMinute: number,
+): boolean {
+  const currentTotal = hour * 60 + minute;
+  const startTotal = startHour * 60 + startMinute;
+  const endTotal = endHour * 60 + endMinute;
+  if (startTotal === endTotal) return true;
+  return startTotal < endTotal
+    ? currentTotal >= startTotal && currentTotal < endTotal
+    : currentTotal >= startTotal || currentTotal < endTotal;
 }
 
 function parseRateSegment(segment: string): ParsedTextRate | null {
@@ -222,6 +253,13 @@ function parseRateSegment(segment: string): ParsedTextRate | null {
   // $X / 30 mins -> X * 2
   match = lower.match(/\$([0-9.]+)\s(?:per|\/)\s?30\s?mins?/);
   if (match) return { amount: parseFloat(match[1]) * 2, basis: 'hour' };
+
+  // $X per N mins -> normalize any positive minute interval to hourly
+  match = lower.match(/\$([0-9.]+)\s*(?:per|\/)\s*([0-9]+(?:\.[0-9]+)?)\s*mins?/);
+  if (match) {
+    const minutes = parseFloat(match[2]);
+    if (minutes > 0) return { amount: parseFloat(match[1]) * (60 / minutes), basis: 'hour' };
+  }
 
   // $X for sub ½ hr -> X * 2
   match = lower.match(/\$([0-9.]+).*?sub.*?½\s?hr/);
@@ -255,6 +293,7 @@ export function parseTextRate(
   rate: string | undefined,
   currentHour: number,
   currentDay?: number,
+  currentMinute = 0,
 ): ParsedTextRate | null {
   if (!rate || rate.trim() === '-' || rate.toLowerCase() === 'no') return null;
 
@@ -275,7 +314,14 @@ export function parseTextRate(
     let inWindow: boolean = previousWindowActive;
 
     if (window) {
-      inWindow = isHourInWindow(currentHour, window.startHour, window.endHour);
+      inWindow = isHourInWindow(
+        currentHour,
+        currentMinute,
+        window.startHour,
+        window.startMinute,
+        window.endHour,
+        window.endMinute,
+      );
     } else if (aftMatch) {
       const startHour = parseHourBoundary(aftMatch[1]);
       if (startHour !== null && explicitStarts.length > 0) {
@@ -283,7 +329,7 @@ export function parseTextRate(
           ?? explicitStarts.filter(hour => hour < startHour).sort((a, b) => a - b)[0];
         inWindow = followingBoundary === undefined
           ? currentHour >= startHour
-          : isHourInWindow(currentHour, startHour, followingBoundary);
+          : isHourInWindow(currentHour, currentMinute, startHour, 0, followingBoundary, 0);
       } else if (startHour !== null) {
         inWindow = currentHour >= startHour;
       }
@@ -410,7 +456,7 @@ export function calculateLiveRates(carpark: Carpark): LivePrices {
   // --- NON-HDB CUSTOM PARSABLE RATES ---
   if (carpark.source === 'lta' || carpark.source === 'ura' || carpark.source === 'supplemental') {
     const rateText = getTargetTextRate(carpark, day, now);
-    const parsed = parseTextRate(rateText, hour, day);
+    const parsed = parseTextRate(rateText, hour, day, now.getMinutes());
 
     if (parsed !== null) {
         if (parsed.basis === 'free') {
@@ -500,6 +546,7 @@ export function getNumericLiveCarRate(carpark: Carpark): number {
       getTargetTextRate(carpark, now.getDay(), now),
       now.getHours(),
       now.getDay(),
+      now.getMinutes(),
     );
     if (!parsed || parsed.basis === 'unknown') return Number.POSITIVE_INFINITY;
     if (parsed.basis === 'entry') return Number.POSITIVE_INFINITY;
