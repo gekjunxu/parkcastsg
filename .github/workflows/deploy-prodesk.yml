@@ -54,7 +54,7 @@ jobs:
       ONEMAP_API_PASSWORD: ${{ secrets.ONEMAP_API_PASSWORD }}
     steps:
       - name: Check out selected branch
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.ref }}
 
