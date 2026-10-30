@@ -9,7 +9,8 @@ import httpx
 
 from app.carparks.errors import CarparkNotFoundError
 from app.carparks.helpers import crowd_level, haversine
-from app.carparks.models import CarparkAvailability, LotTypeAvailability
+from app.carparks.models import CarparkAvailability, CarparkRateSchedule, LotTypeAvailability
+from app.carparks.ura_rates import parse_ura_rate_schedules, project_ura_car_rates
 
 
 URA_ID_PREFIX = "URA_"
@@ -40,6 +41,8 @@ class UraSource:
         self.transport = transport
         self._token: str | None = None
         self._token_date: date | None = None
+        self._rate_schedules: dict[str, list[CarparkRateSchedule]] | None = None
+        self._rate_schedules_date: date | None = None
 
     def _log_warning(self, operation: str, carpark_id: str | None, detail: str) -> None:
         logger.warning(
@@ -147,6 +150,52 @@ class UraSource:
             availability[raw_id] = availability.get(raw_id, 0) + available
         return availability, datetime.now(timezone.utc).isoformat()
 
+    async def _fetch_rates(
+        self, operation: str, carpark_id: str | None
+    ) -> dict[str, list[CarparkRateSchedule]] | None:
+        token = await self._get_token(operation, carpark_id)
+        if token is None:
+            return None
+
+        today = datetime.now(_SINGAPORE_TZ).date()
+        if self._rate_schedules is not None and self._rate_schedules_date == today:
+            return self._rate_schedules
+
+        client_kwargs: dict[str, Any] = {"timeout": 10.0}
+        if self.transport is not None:
+            client_kwargs["transport"] = self.transport
+        try:
+            async with httpx.AsyncClient(**client_kwargs) as client:
+                response = await client.get(
+                    self.availability_url,
+                    params={"service": "Car_Park_Details"},
+                    headers={
+                        "AccessKey": self.api_key,
+                        "Token": token,
+                        "accept": "application/json",
+                        "User-Agent": "ParkCastSG/1.0",
+                        "Referer": "https://eservice.ura.gov.sg/maps/api/",
+                    },
+                )
+                response.raise_for_status()
+        except httpx.HTTPError as exc:
+            self._log_warning(operation, carpark_id, f"details request failed ({exc}); using static details")
+            return None
+
+        try:
+            payload = response.json()
+        except ValueError:
+            self._log_warning(operation, carpark_id, "details response was invalid JSON; using static details")
+            return None
+        entries = payload.get("Result") if isinstance(payload, dict) and payload.get("Status") == "Success" else None
+        if not isinstance(entries, list):
+            self._log_warning(operation, carpark_id, "details response was unsuccessful; using static details")
+            return None
+
+        self._rate_schedules = parse_ura_rate_schedules(entries)
+        self._rate_schedules_date = today
+        return self._rate_schedules
+
     def _record(
         self,
         carpark_id: str,
@@ -155,6 +204,7 @@ class UraSource:
         query_lng: float | None,
         availability: Mapping[str, int] | None,
         timestamp: str | None,
+        rate_schedules: Mapping[str, list[CarparkRateSchedule]] | None,
     ) -> CarparkAvailability:
         distance = 0.0
         if query_lat is not None and query_lng is not None:
@@ -164,6 +214,8 @@ class UraSource:
         live_available = availability.get(raw_id) if availability is not None else None
         has_live_availability = live_available is not None and timestamp is not None
         available_lots = live_available if live_available is not None else 0
+        schedules = list(rate_schedules.get(raw_id, [])) if rate_schedules is not None else []
+        projected_rates = project_ura_car_rates(schedules)
         return CarparkAvailability(
             id=carpark_id,
             name=info["name"],
@@ -183,6 +235,8 @@ class UraSource:
             night_parking=None,
             car_park_type="CAR PARK",
             source=self.source_name,
+            rate_schedules=schedules,
+            **projected_rates,
             availability_timestamp=timestamp if has_live_availability else None,
         )
 
@@ -195,8 +249,17 @@ class UraSource:
         if not nearby:
             return []
         availability, timestamp = await self._fetch_live("list_nearby", None)
+        rate_schedules = await self._fetch_rates("list_nearby", None)
         return [
-            self._record(f"{URA_ID_PREFIX}{raw_id}", info, lat, lng, availability, timestamp)
+            self._record(
+                f"{URA_ID_PREFIX}{raw_id}",
+                info,
+                lat,
+                lng,
+                availability,
+                timestamp,
+                rate_schedules,
+            )
             for raw_id, info in nearby
         ]
 
@@ -214,4 +277,13 @@ class UraSource:
                 f"URA carpark '{carpark_id}' not found",
             )
         availability, timestamp = await self._fetch_live("get_by_id", normalized)
-        return self._record(normalized, info, lat, lng, availability, timestamp)
+        rate_schedules = await self._fetch_rates("get_by_id", normalized)
+        return self._record(
+            normalized,
+            info,
+            lat,
+            lng,
+            availability,
+            timestamp,
+            rate_schedules,
+        )

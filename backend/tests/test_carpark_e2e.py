@@ -19,6 +19,7 @@ class CarparkEndToEndTests(unittest.TestCase):
         self.assertEqual(body["source"], "ura")
         self.assertEqual(body["total_lots"], info["total_lots"])
         self.assertEqual(body["crowd_level"], "unknown")
+        self.assertEqual(body["rate_schedules"], [])
         self.assertIsNone(body["availability_timestamp"])
 
     def test_unknown_ura_detail_returns_not_found(self):

@@ -92,7 +92,16 @@ class UraSourceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(detail.available_lots, 19)
 
         token_requests = [request for request in requests if request.url.path == "/token"]
-        availability_requests = [request for request in requests if request.url.path == "/availability"]
+        availability_requests = [
+            request
+            for request in requests
+            if request.url.params.get("service") == "Car_Park_Availability"
+        ]
+        details_requests = [
+            request
+            for request in requests
+            if request.url.params.get("service") == "Car_Park_Details"
+        ]
         self.assertEqual(len(token_requests), 1)
         self.assertEqual(token_requests[0].headers["AccessKey"], "ura-key")
         self.assertEqual(token_requests[0].headers["User-Agent"], "ParkCastSG/1.0")
@@ -101,6 +110,7 @@ class UraSourceTests(unittest.IsolatedAsyncioTestCase):
             "https://eservice.ura.gov.sg/maps/api/",
         )
         self.assertEqual(len(availability_requests), 2)
+        self.assertEqual(len(details_requests), 1)
         self.assertEqual(availability_requests[0].headers["Token"], "daily-token")
         self.assertEqual(availability_requests[0].headers["User-Agent"], "ParkCastSG/1.0")
         self.assertEqual(
@@ -111,6 +121,114 @@ class UraSourceTests(unittest.IsolatedAsyncioTestCase):
             availability_requests[0].url.params["service"],
             "Car_Park_Availability",
         )
+
+    async def test_daily_details_are_cached_and_projected_for_car_rows(self):
+        requests = []
+
+        async def handler(request):
+            requests.append(request)
+            if request.url.path == "/token":
+                return httpx.Response(200, json={"Status": "Success", "Result": "daily-token"})
+            if request.url.params["service"] == "Car_Park_Details":
+                return httpx.Response(
+                    200,
+                    json={
+                        "Status": "Success",
+                        "Result": [
+                            {
+                                "ppCode": "X0001",
+                                "vehCat": "C",
+                                "startTime": "07.00 AM",
+                                "endTime": "08.30 AM",
+                                "weekdayRate": "$0.60",
+                                "weekdayMin": "30 mins",
+                                "satdayRate": "$0.80",
+                                "satdayMin": "30 mins",
+                                "sunPHRate": "$0.00",
+                                "sunPHMin": "0 mins",
+                            },
+                            {
+                                "ppCode": "X0001",
+                                "vehCat": "M",
+                                "startTime": "07.00 AM",
+                                "endTime": "08.30 AM",
+                                "weekdayRate": "$0.20",
+                                "weekdayMin": "30 mins",
+                            },
+                        ],
+                    },
+                )
+            return httpx.Response(
+                200,
+                json={
+                    "Status": "Success",
+                    "Result": [
+                        {"carparkNo": "X0001", "lotType": "C", "lotsAvailable": "17"},
+                    ],
+                },
+            )
+
+        source = UraSource(
+            LOOKUP,
+            api_key="ura-key",
+            availability_url="https://ura.test/invoke",
+            token_url="https://ura.test/token",
+            transport=httpx.MockTransport(handler),
+        )
+
+        result = (await source.list_nearby(1.3, 103.8, 100))[0]
+        detail = await source.get_by_id("URA_X0001", None, None)
+
+        self.assertEqual(result.available_lots, 17)
+        self.assertEqual([row.vehicle_type for row in result.rate_schedules], ["C", "M"])
+        self.assertEqual(
+            result.weekdays_rate_1,
+            "07.00 AM-08.30 AM: $0.60 per 30 mins",
+        )
+        self.assertIsNone(result.weekdays_rate_2)
+        self.assertEqual(detail.weekdays_rate_1, result.weekdays_rate_1)
+
+        token_requests = [request for request in requests if request.url.path == "/token"]
+        details_requests = [
+            request
+            for request in requests
+            if request.url.params.get("service") == "Car_Park_Details"
+        ]
+        self.assertEqual(len(token_requests), 1)
+        self.assertEqual(len(details_requests), 1)
+        self.assertEqual(details_requests[0].headers["Token"], "daily-token")
+
+    async def test_rate_details_failure_keeps_static_record_without_rates(self):
+        async def handler(request):
+            if request.url.path == "/token":
+                return httpx.Response(200, json={"Status": "Success", "Result": "daily-token"})
+            if request.url.params["service"] == "Car_Park_Details":
+                return httpx.Response(503, text="unavailable")
+            return httpx.Response(
+                200,
+                json={
+                    "Status": "Success",
+                    "Result": [
+                        {"carparkNo": "X0001", "lotType": "C", "lotsAvailable": "17"},
+                    ],
+                },
+            )
+
+        source = UraSource(
+            LOOKUP,
+            api_key="ura-key",
+            availability_url="https://ura.test/invoke",
+            token_url="https://ura.test/token",
+            transport=httpx.MockTransport(handler),
+        )
+
+        with self.assertLogs(level="WARNING"):
+            result = (await source.list_nearby(1.3, 103.8, 100))[0]
+
+        self.assertEqual(result.available_lots, 17)
+        self.assertEqual(result.rate_schedules, [])
+        self.assertIsNone(result.weekdays_rate_1)
+        self.assertEqual(result.total_lots, 42)
 
     async def test_live_failure_falls_back_to_static_capacity(self):
         async def handler(request):
