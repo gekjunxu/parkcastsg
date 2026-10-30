@@ -35,8 +35,9 @@ The URA catalogue is a location/capacity snapshot from the official
 [Capacity of URA Parking Places dataset](https://data.gov.sg/datasets/d_9bf8620ecfdc8a5f8f77e3f02160af5c/view).
 It intentionally does not copy text from `CarparkRates.csv`, so adding URA
 locations cannot silently attach an old rate. URA also provides a live
-`Car_Park_Availability` API, but it requires a URA access key and daily token;
-the application currently exposes these records with unknown availability.
+`Car_Park_Availability` API, which requires a URA access key and daily token.
+When `URA_API_KEY` is configured, the runtime adapter uses that feed; otherwise
+the application exposes these records with unknown availability.
 
 ## Verified rate corrections
 

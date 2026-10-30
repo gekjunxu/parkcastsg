@@ -8,6 +8,7 @@ from pathlib import Path
 
 RUNTIME_VARIABLES = (
     "LTA_API_KEY",
+    "URA_API_KEY",
     "CORS_ALLOW_ORIGINS",
     "ONEMAP_API_EMAIL",
     "ONEMAP_API_PASSWORD",

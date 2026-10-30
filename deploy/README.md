@@ -52,8 +52,10 @@ credentials or access token in source control, frontend variables, or chat.
 
 Optional secrets are `PRODESK_USER` (defaults to `junxu`), `PRODESK_HOST`
 (defaults to `prodesk`), `PRODESK_DEPLOYMENT_ROOT` (defaults to
-`parkcastsg-deployments`), `PRODESK_KNOWN_HOSTS`, `LTA_API_KEY`, and
-`CORS_ALLOW_ORIGINS`. The verified `PRODESK_KNOWN_HOSTS` value can also be
+`parkcastsg-deployments`), `PRODESK_KNOWN_HOSTS`, `LTA_API_KEY`, `URA_API_KEY`,
+and `CORS_ALLOW_ORIGINS`. `URA_API_KEY` enables the live URA car-park
+availability feed; the backend falls back to static capacity if it is absent
+or URA is unavailable. The verified `PRODESK_KNOWN_HOSTS` value can also be
 stored as a repository variable rather than a secret. If omitted, the workflow
 uses `ssh-keyscan` after joining the Tailnet and emits a warning; pinning the
 verified host key is safer.

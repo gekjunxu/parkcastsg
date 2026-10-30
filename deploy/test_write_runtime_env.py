@@ -36,6 +36,7 @@ class RuntimeEnvTests(unittest.TestCase):
     def test_special_characters_round_trip_and_file_is_private(self):
         values = {
             "LTA_API_KEY": "lta-$-key#\\path",
+            "URA_API_KEY": "ura-$-key#\\path",
             "CORS_ALLOW_ORIGINS": "https://example.test/#park",
             "ONEMAP_API_EMAIL": "one+test@example.com",
             "ONEMAP_API_PASSWORD": "p@$$'word#\\path",
@@ -70,10 +71,11 @@ class RuntimeEnvTests(unittest.TestCase):
                 )
 
     @unittest.skipUnless(shutil.which("docker"), "Docker is required for Compose forwarding verification")
-    def test_compose_forwards_both_onemap_variables(self):
+    def test_compose_forwards_runtime_api_variables(self):
         values = {
             "ONEMAP_API_EMAIL": "compose+test@example.com",
             "ONEMAP_API_PASSWORD": "compose-$'secret#\\path",
+            "URA_API_KEY": "compose-ura-key",
         }
         repository = Path(__file__).resolve().parents[1]
         with tempfile.TemporaryDirectory() as directory:
@@ -98,6 +100,7 @@ class RuntimeEnvTests(unittest.TestCase):
             # `docker compose config` doubles literal dollars in its normalized
             # output so the rendered config remains safe to re-parse.
             self.assertEqual(service_environment["ONEMAP_API_PASSWORD"].replace("$$", "$"), values["ONEMAP_API_PASSWORD"])
+            self.assertEqual(service_environment["URA_API_KEY"], values["URA_API_KEY"])
             self.assertNotIn(values["ONEMAP_API_PASSWORD"], result.stderr)
 
 

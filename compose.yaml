@@ -11,6 +11,7 @@ services:
       ENVIRONMENT: production
       APP_BASE_PATH: "${APP_BASE_PATH:-/}"
       LTA_API_KEY: "${LTA_API_KEY:-}"
+      URA_API_KEY: "${URA_API_KEY:-}"
       CORS_ALLOW_ORIGINS: "${CORS_ALLOW_ORIGINS:-}"
       ONEMAP_API_EMAIL: "${ONEMAP_API_EMAIL:-}"
       ONEMAP_API_PASSWORD: "${ONEMAP_API_PASSWORD:-}"

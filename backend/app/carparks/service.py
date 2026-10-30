@@ -94,7 +94,7 @@ def build_default_service() -> CarparkService:
         [
             HdbSource(CARPARK_LOOKUP),
             LtaSource(LTA_CARPARK_LOOKUP, lookup_rate, os.getenv("LTA_API_KEY") or ""),
-            UraSource(URA_CARPARK_LOOKUP),
+            UraSource(URA_CARPARK_LOOKUP, os.getenv("URA_API_KEY") or ""),
             SupplementalSource(SUPPLEMENTAL_CARPARK_LOOKUP, SUPPLEMENTAL_ID_LOOKUP, lookup_rate),
         ]
     )

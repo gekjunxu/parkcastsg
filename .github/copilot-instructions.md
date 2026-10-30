@@ -7,6 +7,7 @@ comprehensive current pricing, followed by live availability and distance.
 - Static lookup CSVs load into memory at process startup.
 - HDB and LTA availability are fetched from their upstream APIs.
 - The LTA key must come from `LTA_API_KEY`; never commit a real key.
+- The URA key must come from `URA_API_KEY`; never commit a real key.
 - Keep unknown availability and unknown amenities distinct from zero/false.
 - Frontend API access belongs in `frontend/src/api/`.
 - Backend API routes belong under `/api/v1`.

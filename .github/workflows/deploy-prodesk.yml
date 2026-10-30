@@ -48,6 +48,7 @@ jobs:
       PRODESK_HOST: ${{ secrets.PRODESK_HOST || 'prodesk' }}
       PRODESK_DEPLOYMENT_ROOT: ${{ secrets.PRODESK_DEPLOYMENT_ROOT || 'parkcastsg-deployments' }}
       LTA_API_KEY: ${{ secrets.LTA_API_KEY }}
+      URA_API_KEY: ${{ secrets.URA_API_KEY }}
       CORS_ALLOW_ORIGINS: ${{ secrets.CORS_ALLOW_ORIGINS }}
       ONEMAP_API_EMAIL: ${{ secrets.ONEMAP_API_EMAIL }}
       ONEMAP_API_PASSWORD: ${{ secrets.ONEMAP_API_PASSWORD }}

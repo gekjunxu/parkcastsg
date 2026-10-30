@@ -35,7 +35,8 @@ React app and serves it from FastAPI, so only one process and port are needed.
 ## Quick start with Docker
 
 1. Copy `.env.example` to `.env`.
-2. Add your own LTA DataMall key if you want live LTA availability.
+2. Add your own LTA DataMall key if you want live LTA availability, and your
+   URA access key if you want live URA availability.
 3. Start the app:
 
 ```sh
@@ -45,9 +46,10 @@ docker compose up --build -d
 Open `http://localhost:8080`. Health and API documentation are available at
 `/health` and `/docs`.
 
-The LTA key is optional. Without it, HDB live availability, static LTA
-locations, and the supplemental rate catalogue continue to work; LTA entries
-show an explicit unavailable-live-data state until a key is configured.
+The LTA and URA keys are optional. Without them, HDB live availability, static
+LTA/URA locations, and the supplemental rate catalogue continue to work; LTA
+and URA entries show an explicit unavailable-live-data state until a key is
+configured.
 
 ## Local development
 
