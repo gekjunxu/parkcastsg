@@ -15,6 +15,28 @@ def _text(row: Mapping[str, Any], key: str) -> str | None:
     return text or None
 
 
+def _is_valid_time(value: str) -> bool:
+    compact = re.fullmatch(r"([0-9]{2})([0-9]{2})", value)
+    if compact:
+        return int(compact.group(1)) <= 23 and int(compact.group(2)) <= 59
+
+    clock = re.fullmatch(
+        r"([0-9]{1,2})(?:\.([0-9]{1,2}))?\s*(AM|PM|MN|MIDNIGHT)",
+        value,
+        re.IGNORECASE,
+    )
+    if not clock:
+        return False
+    hour = int(clock.group(1))
+    minute = int(clock.group(2) or 0)
+    suffix = clock.group(3).upper()
+    if minute > 59:
+        return False
+    if suffix in {"AM", "PM"}:
+        return 1 <= hour <= 12
+    return 0 <= hour <= 12
+
+
 def parse_ura_rate_schedules(
     entries: list[Mapping[str, Any]],
 ) -> dict[str, list[CarparkRateSchedule]]:
@@ -27,7 +49,14 @@ def parse_ura_rate_schedules(
         vehicle_type = _text(row, "vehCat")
         start_time = _text(row, "startTime")
         end_time = _text(row, "endTime")
-        if not pp_code or not vehicle_type or not start_time or not end_time:
+        if (
+            not pp_code
+            or not vehicle_type
+            or not start_time
+            or not end_time
+            or not _is_valid_time(start_time)
+            or not _is_valid_time(end_time)
+        ):
             continue
 
         schedule = CarparkRateSchedule(
@@ -64,12 +93,12 @@ def _is_zero_rate(value: str) -> bool:
 def _format_charge(rate: str | None, minimum: str | None) -> str | None:
     if not rate:
         return None
-    if _is_zero_rate(rate) and (_minutes(minimum) or 0) == 0:
+    duration = _minutes(minimum)
+    if _is_zero_rate(rate) and duration == 0:
         return "Free parking"
     if re.search(r"\bper\b|/", rate, re.IGNORECASE):
         return rate
 
-    duration = _minutes(minimum)
     if duration is None or duration <= 0:
         return rate
     if duration == 60:

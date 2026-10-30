@@ -44,6 +44,13 @@ test('does not pair an earlier per-minute amount with a later entry unit', () =>
   )
 })
 
+test('keeps entry pricing ahead of a later minute clause in one segment', () => {
+  assert.deepEqual(
+    parseTextRate('$2.50 per entry, then $0.32 per 15 mins', 12),
+    { amount: 2.5, basis: 'entry' },
+  )
+})
+
 test('uses the matching weekday tier for Downtown East', () => {
   const rate = 'Mon-Thu 5pm-12am: $2.45 per entry; Fri-Sun 5pm-12am: $3.40 per entry'
   const parsed = parseTextRate(rate, 18, 5)
@@ -84,6 +91,19 @@ test('parses a URA-rendered time window and minimum duration', () => {
     parseTextRate('07.00 AM-08.30 AM: $0.60 per 30 mins', 8),
     { amount: 1.2, basis: 'hour' },
   )
+})
+
+test('preserves minute boundaries when inferring an Aft schedule', () => {
+  const rate = '8.30am-5pm: $1.20 per ½ hr; Aft 5pm: $2.50 per entry'
+
+  assert.deepEqual(parseTextRate(rate, 8, 1, 15), {
+    amount: 2.5,
+    basis: 'entry',
+  })
+  assert.deepEqual(parseTextRate(rate, 8, 1, 30), {
+    amount: 2.4,
+    basis: 'hour',
+  })
 })
 
 test('marks an amount without a billing unit as non-comparable', () => {

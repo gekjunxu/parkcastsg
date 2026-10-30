@@ -104,6 +104,37 @@ class UraRateScheduleTests(unittest.TestCase):
             },
         )
 
+    def test_parser_skips_invalid_clock_rows(self):
+        schedules = parse_ura_rate_schedules([
+            {
+                "ppCode": "X0001",
+                "vehCat": "C",
+                "startTime": "invalid",
+                "endTime": "also-invalid",
+                "weekdayRate": "$0.60",
+                "weekdayMin": "30 mins",
+            }
+        ])
+
+        self.assertEqual(schedules, {})
+
+    def test_zero_rate_requires_an_explicit_zero_minimum_for_free_projection(self):
+        schedules = parse_ura_rate_schedules([
+            {
+                "ppCode": "X0001",
+                "vehCat": "C",
+                "startTime": "07.00 AM",
+                "endTime": "08.00 AM",
+                "weekdayRate": "$0.00",
+                "weekdayMin": "unknown",
+            }
+        ])["X0001"]
+
+        self.assertEqual(
+            project_ura_car_rates(schedules)["weekdays_rate_1"],
+            "07.00 AM-08.00 AM: $0.00",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
